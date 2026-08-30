@@ -2208,13 +2208,15 @@ function renderVoiceUsersInSidebar() {
 const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
 
 socket.on('voiceConnected', async ({ peers, guildId, channelId }) => {
+  console.log('[VOICE] Connected. Peers:', peers.length, 'localStream:', !!localStream, 'tracks:', localStream?.getTracks().length);
   const ch = allChannels[channelId] || {};
   showToast(`Conectado ao canal de voz ${ch.name || channelId}`, 'success');
   sendBrowserNotification('Conectado ao canal de voz', ch.name || channelId);
   playSound('join');
   startVoiceTimer();
   for (const peer of peers) {
-    await createVoicePeerOffer(peer.socketId);
+    console.log('[VOICE] Creating offer for peer:', peer.socketId, peer.username);
+    try { await createVoicePeerOffer(peer.socketId); } catch(e) { console.error('[VOICE] Offer error:', e); }
   }
   showVoicePanel();
   renderGuildChannels();
@@ -2257,9 +2259,11 @@ socket.on('videoTypeChanged', ({ socketId, videoType }) => {
 });
 
 socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
+  console.log('[VOICE] Received offer from:', fromSocketId);
   const pc = new RTCPeerConnection(ICE_SERVERS);
   voicePeers[fromSocketId] = { pc };
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.oniceconnectionstatechange = () => console.log('[VOICE] Answerer ICE state:', pc.iceConnectionState, 'from', fromSocketId);
   if (screenStream) {
     screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
   }
@@ -2284,6 +2288,7 @@ socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
 });
 
 socket.on('voiceAnswer', async ({ answer, fromSocketId }) => {
+  console.log('[VOICE] Received answer from:', fromSocketId);
   if (voicePeers[fromSocketId]?.pc) await voicePeers[fromSocketId].pc.setRemoteDescription(new RTCSessionDescription(answer));
 });
 
@@ -2301,6 +2306,7 @@ async function createVoicePeerOffer(targetSocketId) {
   if (webcamStream) {
     webcamStream.getTracks().forEach(t => pc.addTrack(t, webcamStream));
   }
+  pc.oniceconnectionstatechange = () => console.log('[VOICE] ICE state:', pc.iceConnectionState, 'to', targetSocketId);
   pc.ontrack = (e) => {
     if (e.track.kind === 'video') {
       const vu = Object.values(voiceChannelUsers).flat().find(u => u.socketId === targetSocketId);
