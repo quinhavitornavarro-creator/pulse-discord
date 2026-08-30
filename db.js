@@ -2,13 +2,18 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const pool = process.env.DATABASE_URL
-  ? new Pool({
-      connectionString: process.env.DATABASE_URL.includes('?')
-        ? process.env.DATABASE_URL + '&sslmode=disable'
-        : process.env.DATABASE_URL + '?sslmode=disable'
-    })
-  : null;
+let pool = null;
+if (process.env.DATABASE_URL) {
+  const url = new URL(process.env.DATABASE_URL);
+  pool = new Pool({
+    host: url.hostname,
+    port: url.port || 5432,
+    database: url.pathname.replace('/', ''),
+    user: url.username,
+    password: url.password,
+    ssl: { rejectUnauthorized: false }
+  });
+}
 
 const fileMap = {};
 function regFile(name, filePath) { fileMap[name] = filePath; }
