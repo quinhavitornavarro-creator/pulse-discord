@@ -5,9 +5,8 @@ const path = require('path');
 const pool = process.env.DATABASE_URL
   ? new Pool({
       connectionString: process.env.DATABASE_URL.includes('?')
-        ? process.env.DATABASE_URL + '&sslmode=require'
-        : process.env.DATABASE_URL + '?sslmode=require',
-      ssl: { rejectUnauthorized: false }
+        ? process.env.DATABASE_URL + '&sslmode=disable'
+        : process.env.DATABASE_URL + '?sslmode=disable'
     })
   : null;
 
