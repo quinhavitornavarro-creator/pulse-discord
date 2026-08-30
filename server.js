@@ -98,8 +98,9 @@ function createDefaultGuild(ownerId) {
     { id: 'random', name: 'random', category: 'texto', position: 1 },
     { id: 'voz-geral', name: 'Geral', category: 'voz', position: 0 }
   ];
+  const inviteCode = Math.random().toString(36).substr(2, 8);
   guilds[guildId] = {
-    id: guildId, name: 'Meu Servidor', ownerId, icon: null,
+    id: guildId, name: 'Meu Servidor', ownerId, icon: null, inviteCode,
     roles: {
       owner: { id: 'owner', name: 'Dono', color: '#ed4245', permissions: ['all'], position: 3 },
       admin: { id: 'admin', name: 'Admin', color: '#e67e22', permissions: ['manage_channels', 'kick', 'ban', 'manage_roles'], position: 2 },
@@ -336,7 +337,7 @@ app.get('/api/friends/:userId', (req, res) => {
 app.get('/api/guilds', authMiddleware, (req, res) => {
   const guilds = loadGuilds();
   const userGuilds = Object.values(guilds).filter(g => g.members && g.members[req.userId]);
-  res.json(userGuilds.map(g => ({ id: g.id, name: g.name, icon: g.icon, ownerId: g.ownerId, memberCount: Object.keys(g.members).length })));
+  res.json(userGuilds.map(g => ({ id: g.id, name: g.name, icon: g.icon, ownerId: g.ownerId, inviteCode: g.inviteCode, memberCount: Object.keys(g.members).length })));
 });
 
 app.post('/api/guilds', authMiddleware, (req, res) => {
@@ -545,6 +546,7 @@ app.post('/api/guilds/:id/invite', authMiddleware, (req, res) => {
   if (!guild.invites) guild.invites = {};
   const code = Math.random().toString(36).substr(2, 8);
   guild.invites[code] = { createdBy: req.userId, uses: 0, createdAt: new Date().toISOString() };
+  guild.inviteCode = code;
   saveGuilds(guilds);
   res.json({ success: true, code });
 });
