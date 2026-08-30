@@ -315,6 +315,14 @@ app.post('/api/avatar', authMiddleware, express.json({ limit: '5mb' }), (req, re
   } catch (e) { console.error('Erro avatar:', e); res.status(500).json({ error: 'Erro ao salvar avatar' }); }
 });
 
+app.get('/api/me', authMiddleware, (req, res) => {
+  const db = loadDB(DB_FILE);
+  const user = db[req.userId];
+  if (!user) return res.status(404).json({ error: 'Nao encontrado' });
+  const { password: _, ...userData } = user;
+  res.json(userData);
+});
+
 app.get('/api/user/:id', (req, res) => {
   const db = loadDB(DB_FILE);
   const user = db[req.params.id];

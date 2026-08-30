@@ -2797,20 +2797,30 @@ sendMessage = function() {
 
 // Patch checkSession pra incluir novos sistemas
 const _origCheckSession = checkSession;
-checkSession = function() {
+checkSession = async function() {
   const saved = localStorage.getItem('pulseUser');
   const token = localStorage.getItem('pulseToken');
-  if (saved) {
-    myUser = JSON.parse(saved);
-    authToken = token;
-    enterChat();
-    const params = new URLSearchParams(location.search);
-    const inviteCode = params.get('invite');
-    if (inviteCode) joinGuildByCode(inviteCode);
-  } else {
-    showWelcome();
-    initParticles();
+  if (saved && token) {
+    try {
+      const res = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (res.ok) {
+        const data = await res.json();
+        myUser = data;
+        authToken = token;
+        localStorage.setItem('pulseUser', JSON.stringify(myUser));
+        enterChat();
+        const params = new URLSearchParams(location.search);
+        const inviteCode = params.get('invite');
+        if (inviteCode) joinGuildByCode(inviteCode);
+        return;
+      }
+    } catch (e) {}
   }
+  localStorage.removeItem('pulseUser');
+  localStorage.removeItem('pulseToken');
+  authToken = null;
+  showWelcome();
+  initParticles();
 };
 
 // Patch enterChat pra carregar guilds, DMs, etc
