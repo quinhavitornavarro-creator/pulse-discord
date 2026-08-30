@@ -102,9 +102,9 @@ function createDefaultGuild(ownerId) {
   const guilds = loadGuilds();
   const guildId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
   const defaultChannels = [
-    { id: 'geral', name: 'geral', category: 'texto', position: 0 },
-    { id: 'random', name: 'random', category: 'texto', position: 1 },
-    { id: 'voz-geral', name: 'Geral', category: 'voz', position: 0 }
+    { name: 'geral', category: 'texto', position: 0 },
+    { name: 'random', category: 'texto', position: 1 },
+    { name: 'Geral', category: 'voz', position: 0 }
   ];
   const inviteCode = Math.random().toString(36).substr(2, 8);
   guilds[guildId] = {
@@ -122,7 +122,8 @@ function createDefaultGuild(ownerId) {
   };
   defaultChannels.forEach(c => {
     const type = c.category === 'voz' ? 'voice' : 'text';
-    guilds[guildId].channels[c.id] = { ...c, type, categoryId: c.category === 'voz' ? 'voz' : 'texto' };
+    const chId = c.name.toLowerCase().replace(/[^a-z0-9-]/g, '-') + '-' + guildId;
+    guilds[guildId].channels[chId] = { id: chId, name: c.name, type, categoryId: c.category === 'voz' ? 'voz' : 'texto', position: c.position, locked: false, permissions: type === 'voice' ? { seeChannel: true, connect: true, speak: true } : null, icon: type === 'voice' ? '🔊' : '💬', createdAt: new Date().toISOString() };
   });
   guilds[guildId].categories = { texto: { id: 'texto', name: 'Texto', position: 0 }, voz: { id: 'voz', name: 'Voz', position: 1 } };
   saveGuilds(guilds);
@@ -464,7 +465,7 @@ app.delete('/api/guilds/:guildId/channels/:channelId', authMiddleware, (req, res
   const guild = guilds[req.params.guildId];
   if (!guild) return res.status(404).json({ error: 'Nao encontrado' });
   if (!hasPermission(guild, req.userId, 'manage_channels')) return res.status(403).json({ error: 'Sem permissao' });
-  if (['geral', 'random'].includes(req.params.channelId)) return res.status(400).json({ error: 'Canal padrao' });
+  if (Object.keys(guild.channels).length <= 3 && Object.values(guild.channels).some(c => c.name === ch.name)) return res.status(400).json({ error: 'Canal padrao' });
   delete guild.channels[req.params.channelId];
   saveGuilds(guilds);
   for (const [id, msg] of messages) { if (msg.guildId === guild.id && (msg.channel || 'geral') === req.params.channelId) messages.delete(id); }
