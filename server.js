@@ -1721,8 +1721,12 @@ function processMentions(text, guild, db) {
 
 const PORT = process.env.PORT || 3000;
 
-// Migracao: corrigir canais sem campo type
-(function fixChannelTypes() {
+(async () => {
+  await initPG();
+  await restoreFromPG();
+  loadMessagesFromDisk();
+
+  // Migracao: corrigir canais sem campo type
   const guilds = loadGuilds();
   let changed = false;
   for (const [gId, guild] of Object.entries(guilds)) {
@@ -1732,13 +1736,27 @@ const PORT = process.env.PORT || 3000;
         changed = true;
       }
     }
+    const newChannels = {};
+    for (const [chId, ch] of Object.entries(guild.channels || {})) {
+      if (['geral', 'random', 'voz-geral'].includes(chId)) {
+        const newId = chId + '-' + gId;
+        ch.id = newId;
+        newChannels[newId] = ch;
+        for (const [mId, msg] of messages) {
+          if (msg.guildId === gId && (msg.channel || 'geral') === chId) msg.channel = newId;
+        }
+        changed = true;
+      } else {
+        newChannels[chId] = ch;
+      }
+    }
+    guild.channels = newChannels;
   }
-  if (changed) saveGuilds(guilds);
-})();
+  if (changed) {
+    saveGuilds(guilds);
+    saveMessages();
+    console.log('🔄 Migracao: canais corrigidos');
+  }
 
-(async () => {
-  await initPG();
-  await restoreFromPG();
-  loadMessagesFromDisk();
   server.listen(PORT, () => console.log(`⚡ PULSE rodando em http://localhost:${PORT}`));
 })();

@@ -1284,7 +1284,7 @@ async function toggleChannelPrivacy() {
 
 async function deleteChannel() {
   if (!channelContextId) return;
-  try { await fetch(`/api/channels/${channelContextId}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: myUser?.id }) }); if (currentChannel === channelContextId) switchChannel('geral'); showToast(`Canal deletado`, 'info'); } catch (e) { showToast('Erro', 'error'); }
+  try { await fetch(`/api/channels/${channelContextId}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: myUser?.id }) }); if (currentChannel === channelContextId) { const first = Object.values(allChannels).find(c => c.type === 'text' && c.id !== channelContextId); if (first) switchGuildChannel(first.id); } showToast(`Canal deletado`, 'info'); } catch (e) { showToast('Erro', 'error'); }
 }
 
 async function toggleLockChannel() {
