@@ -2206,7 +2206,14 @@ function renderVoiceUsersInSidebar() {
 }
 
 let ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
-fetch('/api/ice-config').then(r => r.json()).then(d => { if (d.iceServers) ICE_SERVERS = { iceServers: d.iceServers }; }).catch(() => {});
+(async function loadIceConfig() {
+  try {
+    const r = await fetch('/api/ice-config');
+    const d = await r.json();
+    if (d.iceServers) ICE_SERVERS = { iceServers: d.iceServers };
+    console.log('[ICE] Config loaded:', ICE_SERVERS.iceServers.length, 'servers');
+  } catch(e) { console.log('[ICE] Using default STUN only'); }
+})();
 
 function voiceDebug(msg) {
   console.log('[VOICE]', msg);

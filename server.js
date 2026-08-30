@@ -1731,6 +1731,12 @@ app.get('/api/ice-config', (req, res) => {
       username: process.env.TURN_USERNAME || '',
       credential: process.env.TURN_CREDENTIAL || ''
     });
+  } else {
+    iceServers.push(
+      { urls: 'turn:openrelay.metered.ca:80', username: 'OpenRelayUser', credential: 'OpenRelayPassword' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'OpenRelayUser', credential: 'OpenRelayPassword' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'OpenRelayUser', credential: 'OpenRelayPassword' }
+    );
   }
   res.json({ iceServers });
 });
