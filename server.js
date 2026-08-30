@@ -6,6 +6,7 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+const db = require('./db');
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +33,19 @@ const DMS_FILE = path.join(__dirname, 'data', 'dms.json');
 const CATEGORIES_FILE = path.join(__dirname, 'data', 'categories.json');
 const ACTIVITY_FILE = path.join(__dirname, 'data', 'activity.json');
 const CHANNEL_INVITES_FILE = path.join(__dirname, 'data', 'channel_invites.json');
+const ADMIN_FILE = path.join(__dirname, 'data', 'admin.json');
+const XP_FILE = path.join(__dirname, 'data', 'xp.json');
+
+db.regFile('users', DB_FILE);
+db.regFile('messages', MSG_DB);
+db.regFile('channels', CHANNELS_FILE);
+db.regFile('guilds', GUILDS_FILE);
+db.regFile('dms', DMS_FILE);
+db.regFile('categories', CATEGORIES_FILE);
+db.regFile('activity', ACTIVITY_FILE);
+db.regFile('channel_invites', CHANNEL_INVITES_FILE);
+db.regFile('admin', ADMIN_FILE);
+db.regFile('xp', XP_FILE);
 
 function loadDB(file) { if (!fs.existsSync(file)) return {}; return JSON.parse(fs.readFileSync(file, 'utf8')); }
 function saveDB(file, db) { fs.writeFileSync(file, JSON.stringify(db, null, 2)); }
@@ -1602,9 +1616,8 @@ app.delete('/api/guilds/:guildId/events/:eventId', authMiddleware, (req, res) =>
 });
 
 // ============= XP / LEVELS =============
-const XP_FILE = path.join(__dirname, 'data', 'xp.json');
 function loadXP() { return loadDB(XP_FILE); }
-function saveXP(db) { saveDB(XP_FILE, db); }
+function saveXP(data) { saveDB(XP_FILE, data); }
 
 function getLevel(xp) { return Math.floor(0.1 * Math.sqrt(xp)); }
 function getXPForLevel(level) { return Math.pow(level * 10, 2); }
@@ -1635,9 +1648,8 @@ function addXP(guildId, userId, amount) {
 }
 
 // ============= ADMIN PANEL + 2FA =============
-const ADMIN_FILE = path.join(__dirname, 'data', 'admin.json');
 function loadAdmin() { return loadDB(ADMIN_FILE); }
-function saveAdmin(db) { saveDB(ADMIN_FILE, db); }
+function saveAdmin(data) { saveDB(ADMIN_FILE, data); }
 
 app.get('/api/admin/stats', authMiddleware, (req, res) => {
   const db = loadDB(DB_FILE);
@@ -1737,4 +1749,8 @@ const PORT = process.env.PORT || 3000;
   if (changed) saveGuilds(guilds);
 })();
 
-server.listen(PORT, () => console.log(`⚡ PULSE rodando em http://localhost:${PORT}`));
+(async () => {
+  await db.initPG();
+  await db.restoreFromPG();
+  server.listen(PORT, () => console.log(`⚡ PULSE rodando em http://localhost:${PORT}`));
+})();
