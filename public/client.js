@@ -132,13 +132,18 @@ function applyNoiseSuppression(stream, level) {
   gainNode.connect(destination);
 
   let _active = true;
+  let lastGateState = false;
   function checkGate() {
     if (!_active) return;
     analyser.getByteFrequencyData(dataArray);
     let sum = 0;
     for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
     const avg = sum / dataArray.length;
-    gainNode.gain.value = avg > (5 + (level * 3)) ? 1.0 : 0.0;
+    const gateOpen = avg > (5 + (level * 3));
+    if (gateOpen !== lastGateState) {
+      gainNode.gain.linearRampToValueAtTime(gateOpen ? 1.0 : 0.0, audioCtx.currentTime + 0.05);
+      lastGateState = gateOpen;
+    }
     requestAnimationFrame(checkGate);
   }
   checkGate();
@@ -2054,9 +2059,7 @@ let currentVoiceChannel = null;
 async function joinVoiceChannel(guildId, channelId) {
   try {
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    const cfg = NOISE_LEVELS[myUser?.settings?.noiseSuppression || 0] || NOISE_LEVELS[0];
-    if (cfg.label !== 'Off') localStream = applyNoiseSuppression(localStream, myUser.settings.noiseSuppression);
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 } });
     currentVoiceChannel = { guildId, channelId };
     localStorage.setItem('pulseVoice', JSON.stringify(currentVoiceChannel));
     socket.emit('voiceJoin', { guildId, channelId });
