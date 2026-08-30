@@ -2345,7 +2345,7 @@ function removeScreenShareVideo(socketId) {
   if (el) el.remove();
 }
 
-let vadThreshold = 37;
+let vadThreshold = 15;
 window.vadThreshold = vadThreshold;
 const speakingUsers = {};
 

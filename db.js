@@ -4,13 +4,8 @@ const path = require('path');
 
 let pool = null;
 if (process.env.DATABASE_URL) {
-  const url = new URL(process.env.DATABASE_URL);
   pool = new Pool({
-    host: url.hostname,
-    port: url.port || 5432,
-    database: url.pathname.replace('/', ''),
-    user: url.username,
-    password: url.password,
+    connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
   });
 }
