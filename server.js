@@ -6,7 +6,8 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const db = require('./db');
+const dbModule = require('./db');
+const { loadDB, saveDB, pool, regFile, initPG, restoreFromPG } = dbModule;
 
 const app = express();
 const server = http.createServer(app);
@@ -35,20 +36,27 @@ const ACTIVITY_FILE = path.join(__dirname, 'data', 'activity.json');
 const CHANNEL_INVITES_FILE = path.join(__dirname, 'data', 'channel_invites.json');
 const ADMIN_FILE = path.join(__dirname, 'data', 'admin.json');
 const XP_FILE = path.join(__dirname, 'data', 'xp.json');
+const THREADS_FILE = path.join(__dirname, 'data', 'threads.json');
+const EMOJI_FILE = path.join(__dirname, 'data', 'custom_emoji.json');
+const BOTS_FILE = path.join(__dirname, 'data', 'bots.json');
+const EVENTS_FILE = path.join(__dirname, 'data', 'events.json');
+const STICKERS_FILE = path.join(__dirname, 'data', 'stickers.json');
 
-db.regFile('users', DB_FILE);
-db.regFile('messages', MSG_DB);
-db.regFile('channels', CHANNELS_FILE);
-db.regFile('guilds', GUILDS_FILE);
-db.regFile('dms', DMS_FILE);
-db.regFile('categories', CATEGORIES_FILE);
-db.regFile('activity', ACTIVITY_FILE);
-db.regFile('channel_invites', CHANNEL_INVITES_FILE);
-db.regFile('admin', ADMIN_FILE);
-db.regFile('xp', XP_FILE);
-
-function loadDB(file) { if (!fs.existsSync(file)) return {}; return JSON.parse(fs.readFileSync(file, 'utf8')); }
-function saveDB(file, db) { fs.writeFileSync(file, JSON.stringify(db, null, 2)); }
+regFile('users', DB_FILE);
+regFile('messages', MSG_DB);
+regFile('channels', CHANNELS_FILE);
+regFile('guilds', GUILDS_FILE);
+regFile('dms', DMS_FILE);
+regFile('categories', CATEGORIES_FILE);
+regFile('activity', ACTIVITY_FILE);
+regFile('channel_invites', CHANNEL_INVITES_FILE);
+regFile('admin', ADMIN_FILE);
+regFile('xp', XP_FILE);
+regFile('threads', THREADS_FILE);
+regFile('custom_emoji', EMOJI_FILE);
+regFile('bots', BOTS_FILE);
+regFile('events', EVENTS_FILE);
+regFile('stickers', STICKERS_FILE);
 
 function generateToken(userId) { return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' }); }
 function authMiddleware(req, res, next) {
@@ -289,7 +297,7 @@ app.put('/api/change-password', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/avatar', authMiddleware, express.json({ limit: '5mb' }), (req, res) => {
-  const { base64, filename } = req.body;
+  const { base64 } = req.body;
   const db = loadDB(DB_FILE);
   const userId = req.userId;
   if (!db[userId]) return res.status(404).json({ error: 'Nao encontrado' });
@@ -297,12 +305,8 @@ app.post('/api/avatar', authMiddleware, express.json({ limit: '5mb' }), (req, re
   try {
     const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
     if (!matches) return res.status(400).json({ error: 'Formato invalido' });
-    const ext = matches[1];
-    const data = Buffer.from(matches[2], 'base64');
-    const fileName = `${userId}.${ext}`;
-    const filePath = path.join(__dirname, 'public/uploads/avatars', fileName);
-    fs.writeFileSync(filePath, data);
-    db[userId].avatar = `/uploads/avatars/${fileName}?t=${Date.now()}`;
+    if (matches[2].length > 1500000) return res.status(400).json({ error: 'Imagem muito grande (max 1MB)' });
+    db[userId].avatar = base64;
     saveDB(DB_FILE, db);
     io.emit('usersUpdate', getOnlineUsers());
     const { password: _, ...userData } = db[userId];
@@ -395,22 +399,16 @@ app.put('/api/guilds/:id', authMiddleware, (req, res) => {
   if (req.body.name) guild.name = req.body.name;
   if (req.body.icon !== undefined) {
     if (req.body.icon && req.body.icon.startsWith('data:image')) {
-      const ext = req.body.icon.split(';')[0].split('/')[1] || 'png';
-      const fileName = `guild-icon-${guild.id}-${Date.now()}.${ext}`;
-      const base64Data = req.body.icon.replace(/^data:image\/\w+;base64,/, '');
-      fs.writeFileSync(path.join(__dirname, 'public/uploads', fileName), base64Data, 'base64');
-      guild.icon = `/uploads/${fileName}`;
+      if (req.body.icon.length > 1500000) return res.status(400).json({ error: 'Icone muito grande (max 1MB)' });
+      guild.icon = req.body.icon;
     } else {
       guild.icon = req.body.icon;
     }
   }
   if (req.body.banner !== undefined) {
     if (req.body.banner && req.body.banner.startsWith('data:image')) {
-      const ext = req.body.banner.split(';')[0].split('/')[1] || 'png';
-      const fileName = `guild-banner-${guild.id}-${Date.now()}.${ext}`;
-      const base64Data = req.body.banner.replace(/^data:image\/\w+;base64,/, '');
-      fs.writeFileSync(path.join(__dirname, 'public/uploads', fileName), base64Data, 'base64');
-      guild.banner = `/uploads/${fileName}`;
+      if (req.body.banner.length > 1500000) return res.status(400).json({ error: 'Banner muito grande (max 1MB)' });
+      guild.banner = req.body.banner;
     } else {
       guild.banner = req.body.banner;
     }
@@ -1021,23 +1019,18 @@ io.on('connection', (socket) => {
   socket.on('fileMessage', (data) => {
     const user = users.get(socket.id);
     if (!user) return;
-    const ext = data.filename.split('.').pop().toLowerCase();
-    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
-    const base64Data = data.base64.replace(/^data:.*?;base64,/, '');
-
-    fs.writeFile(path.join(__dirname, 'public/uploads', fileName), base64Data, 'base64', (err) => {
-      if (err) return;
-      const db = loadDB(DB_FILE);
-      const userData = db[user.userId];
-      const msg = addMessage({
-        username: user.username, userId: user.userId,
-        avatar: userData?.avatar || null, avatarEmoji: userData?.avatarEmoji || '👤', avatarColor: userData?.avatarColor || '#5865f2',
-        text: data.text || '',
-        file: { url: `/uploads/${fileName}`, name: data.filename, type: data.fileType, size: data.size },
-        replyTo: data.replyTo || null,
-        channel: data.channel || 'geral', guildId: data.guildId || null, dmId: data.dmId || null,
-        timestamp: new Date().toISOString(), socketId: socket.id, mentions: []
-      });
+    if (data.base64 && data.base64.length > 5000000) return;
+    const db = loadDB(DB_FILE);
+    const userData = db[user.userId];
+    const msg = addMessage({
+      username: user.username, userId: user.userId,
+      avatar: userData?.avatar || null, avatarEmoji: userData?.avatarEmoji || '👤', avatarColor: userData?.avatarColor || '#5865f2',
+      text: data.text || '',
+      file: { url: data.base64 || '', name: data.filename, type: data.fileType, size: data.size },
+      replyTo: data.replyTo || null,
+      channel: data.channel || 'geral', guildId: data.guildId || null, dmId: data.dmId || null,
+      timestamp: new Date().toISOString(), socketId: socket.id, mentions: []
+    });
 
       if (data.dmId) {
         const dm = loadDMs()[data.dmId];
@@ -1051,7 +1044,6 @@ io.on('connection', (socket) => {
         const senderBlocked = targetDb?.blocked || [];
         io.emit('message', msg);
       }
-    });
   });
 
   socket.on('editMessage', (data) => {
@@ -1422,7 +1414,6 @@ app.get('/api/pins', (req, res) => res.json(pinnedMessages));
 app.get('/api/online', (req, res) => res.json(getOnlineUsers()));
 
 // ============= THREADS =============
-const THREADS_FILE = path.join(__dirname, 'data', 'threads.json');
 function loadThreads() { return loadDB(THREADS_FILE); }
 function saveThreads(db) { saveDB(THREADS_FILE, db); }
 
@@ -1460,7 +1451,6 @@ app.get('/api/threads/:id/messages', (req, res) => {
 });
 
 // ============= CUSTOM EMOJI/STICKERS =============
-const EMOJI_FILE = path.join(__dirname, 'data', 'custom_emoji.json');
 function loadCustomEmoji() { return loadDB(EMOJI_FILE); }
 function saveCustomEmoji(db) { saveDB(EMOJI_FILE, db); }
 
@@ -1474,11 +1464,8 @@ app.post('/api/guilds/:id/emoji', authMiddleware, express.json({ limit: '2mb' })
   const emojiId = `emoji_${Date.now().toString(36)}`;
   const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
   if (!matches) return res.status(400).json({ error: 'Formato invalido' });
-  const ext = matches[1];
-  const data = Buffer.from(matches[2], 'base64');
-  const fileName = `${emojiId}.${ext}`;
-  fs.writeFileSync(path.join(__dirname, 'public/uploads', fileName), data);
-  emojis[emojiId] = { id: emojiId, name, url: `/uploads/${fileName}`, guildId: req.params.id, createdBy: req.userId, createdAt: new Date().toISOString() };
+  if (matches[2].length > 1000000) return res.status(400).json({ error: 'Emoji muito grande (max 1MB)' });
+  emojis[emojiId] = { id: emojiId, name, url: base64, guildId: req.params.id, createdBy: req.userId, createdAt: new Date().toISOString() };
   saveCustomEmoji(emojis);
   res.json({ success: true, emoji: emojis[emojiId] });
 });
@@ -1494,24 +1481,20 @@ app.post('/api/guilds/:id/sticker', authMiddleware, express.json({ limit: '2mb' 
   if (!name || !base64) return res.status(400).json({ error: 'Nome e imagem obrigatorios' });
   const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
   if (!matches) return res.status(400).json({ error: 'Formato invalido' });
-  const ext = matches[1];
-  const data = Buffer.from(matches[2], 'base64');
+  if (matches[2].length > 1000000) return res.status(400).json({ error: 'Sticker muito grande (max 1MB)' });
   const stickerId = `sticker_${Date.now().toString(36)}`;
-  const fileName = `${stickerId}.${ext}`;
-  fs.writeFileSync(path.join(__dirname, 'public/uploads', fileName), data);
-  const stickers = loadDB(path.join(__dirname, 'data', 'stickers.json'));
-  stickers[stickerId] = { id: stickerId, name, url: `/uploads/${fileName}`, guildId: req.params.id, createdBy: req.userId };
-  saveDB(path.join(__dirname, 'data', 'stickers.json'), stickers);
+  const stickers = loadDB(STICKERS_FILE);
+  stickers[stickerId] = { id: stickerId, name, url: base64, guildId: req.params.id, createdBy: req.userId };
+  saveDB(STICKERS_FILE, stickers);
   res.json({ success: true, sticker: stickers[stickerId] });
 });
 
 app.get('/api/guilds/:id/stickers', (req, res) => {
-  const stickers = loadDB(path.join(__dirname, 'data', 'stickers.json'));
+  const stickers = loadDB(STICKERS_FILE);
   res.json(Object.values(stickers).filter(s => s.guildId === req.params.id));
 });
 
 // ============= BOT FRAMEWORK =============
-const BOTS_FILE = path.join(__dirname, 'data', 'bots.json');
 function loadBots() { return loadDB(BOTS_FILE); }
 function saveBots(db) { saveDB(BOTS_FILE, db); }
 
@@ -1572,7 +1555,6 @@ function generateEmbed(url) {
 }
 
 // ============= EVENTS =============
-const EVENTS_FILE = path.join(__dirname, 'data', 'events.json');
 function loadEvents() { return loadDB(EVENTS_FILE); }
 function saveEvents(db) { saveDB(EVENTS_FILE, db); }
 
@@ -1754,8 +1736,8 @@ const PORT = process.env.PORT || 3000;
 })();
 
 (async () => {
-  await db.initPG();
-  await db.restoreFromPG();
+  await initPG();
+  await restoreFromPG();
   loadMessagesFromDisk();
   server.listen(PORT, () => console.log(`⚡ PULSE rodando em http://localhost:${PORT}`));
 })();
