@@ -62,9 +62,11 @@ const users = new Map();
 const pinnedMessages = new Map();
 let messageIdCounter = 0;
 
-if (fs.existsSync(MSG_DB)) {
-  const saved = JSON.parse(fs.readFileSync(MSG_DB, 'utf8'));
-  saved.forEach(m => { messages.set(m.id, m); messageIdCounter = Math.max(messageIdCounter, m.id); });
+function loadMessagesFromDisk() {
+  if (fs.existsSync(MSG_DB)) {
+    const saved = JSON.parse(fs.readFileSync(MSG_DB, 'utf8'));
+    saved.forEach(m => { messages.set(m.id, m); messageIdCounter = Math.max(messageIdCounter, m.id); });
+  }
 }
 
 function addMessage(msg) {
@@ -966,7 +968,7 @@ io.on('connection', (socket) => {
       timestamp: new Date().toISOString(), socketId: socket.id, mentions
     });
 
-    if (messageIdCounter % 10 === 0) saveMessages();
+    saveMessages();
     if (db[user.userId].stats) db[user.userId].stats.messagesSent = (db[user.userId].stats.messagesSent || 0) + 1;
     saveDB(DB_FILE, db);
 
@@ -1162,7 +1164,7 @@ io.on('connection', (socket) => {
     });
     const dm = loadDMs()[data.dmId];
     if (dm) dm.participants.forEach(pid => { for (const [sid, u] of users) { if (u.userId === pid) io.to(sid).emit('dmMessage', msg); } });
-    if (messageIdCounter % 10 === 0) saveMessages();
+    saveMessages();
   });
 
   // Friends
@@ -1360,7 +1362,7 @@ io.on('connection', (socket) => {
       saveThreads(threads);
     }
     io.emit('threadMessage', msg);
-    if (messageIdCounter % 10 === 0) saveMessages();
+    saveMessages();
   });
 
   socket.on('disconnect', () => {
@@ -1752,5 +1754,6 @@ const PORT = process.env.PORT || 3000;
 (async () => {
   await db.initPG();
   await db.restoreFromPG();
+  loadMessagesFromDisk();
   server.listen(PORT, () => console.log(`⚡ PULSE rodando em http://localhost:${PORT}`));
 })();
