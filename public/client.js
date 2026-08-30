@@ -309,6 +309,13 @@ function enterChat() {
   if (myUser.settings?.accentColor) applyAccent(myUser.settings.accentColor);
   applyAccessibility();
   loadFriends();
+  const savedVoice = localStorage.getItem('pulseVoice');
+  if (savedVoice) {
+    try {
+      const vc = JSON.parse(savedVoice);
+      setTimeout(() => joinVoiceChannel(vc.guildId, vc.channelId), 1500);
+    } catch (e) { localStorage.removeItem('pulseVoice'); }
+  }
 }
 
 function updateMyUI() {
@@ -2050,6 +2057,7 @@ async function joinVoiceChannel(guildId, channelId) {
     const cfg = NOISE_LEVELS[myUser?.settings?.noiseSuppression || 0] || NOISE_LEVELS[0];
     if (cfg.label !== 'Off') localStream = applyNoiseSuppression(localStream, myUser.settings.noiseSuppression);
     currentVoiceChannel = { guildId, channelId };
+    localStorage.setItem('pulseVoice', JSON.stringify(currentVoiceChannel));
     socket.emit('voiceJoin', { guildId, channelId });
     voiceConnected = true;
     showVoicePanel();
@@ -2066,6 +2074,7 @@ async function joinVoiceChannel(guildId, channelId) {
 
 function leaveVoiceChannel() {
   socket.emit('voiceLeave');
+  localStorage.removeItem('pulseVoice');
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   Object.values(voicePeers).forEach(p => { if (p.pc) p.pc.close(); });
   voicePeers = {};
