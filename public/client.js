@@ -2808,7 +2808,33 @@ enterChat = function() {
   setupLazyLoading();
   setupDragAndDrop();
   oldestMessageId = null;
+  const savedVoice = localStorage.getItem('pulseVoice');
+  if (savedVoice) {
+    try {
+      const vc = JSON.parse(savedVoice);
+      setTimeout(() => joinVoiceChannel(vc.guildId, vc.channelId), 1500);
+    } catch (e) { localStorage.removeItem('pulseVoice'); }
+  }
 };
+
+socket.on('connect', () => {
+  if (myUser) {
+    socket.emit('join', myUser.id);
+    const savedVoice = localStorage.getItem('pulseVoice');
+    if (savedVoice && !voiceConnected) {
+      try {
+        const vc = JSON.parse(savedVoice);
+        setTimeout(() => joinVoiceChannel(vc.guildId, vc.channelId), 1000);
+      } catch (e) { localStorage.removeItem('pulseVoice'); }
+    }
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && myUser && !socket.connected) {
+    socket.connect();
+  }
+});
 
 // ============= THREADS =============
 let currentThread = null;
