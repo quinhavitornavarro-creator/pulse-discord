@@ -1485,7 +1485,7 @@ function showChannelWelcome(channelId) {
 }
 
 // ============= SOCKET EVENTS =============
-socket.on('message', (msg) => { if ((msg.channel || 'geral') === currentChannel) { renderMessage(msg); playSound('msg'); } });
+socket.on('message', (msg) => { if ((msg.channel || 'geral') === currentChannel && msg.guildId === currentGuild?.id) { renderMessage(msg); playSound('msg'); } });
 socket.on('messageEdited', (data) => { const el = document.querySelector(`#msg-${data.id} .msg-text`); if (el) el.textContent = data.text; const h = document.querySelector(`#msg-${data.id} .msg-header`); if (h && !h.querySelector('.msg-edited')) h.insertAdjacentHTML('beforeend', '<span class="msg-edited">(editado)</span>'); });
 socket.on('messageDeleted', (data) => { document.getElementById(`msg-${data.id}`)?.remove(); });
 socket.on('messagePinned', (data) => { const el = document.getElementById(`msg-${data.id}`); if (el) { el.classList.toggle('pinned', data.pinned); const b = el.querySelector('.msg-pin-badge'); if (data.pinned && !b) el.querySelector('.msg-header')?.insertAdjacentHTML('beforeend', '<span class="msg-pin-badge">📌</span>'); else if (!data.pinned && b) b.remove(); } });
