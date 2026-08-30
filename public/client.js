@@ -1954,7 +1954,7 @@ async function saveGuildEdit() {
   }
 
   try {
-    const res = await fetch(`/api/guilds/${currentGuild.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${myUser.token}` }, body: JSON.stringify(updates) });
+    const res = await fetch(`/api/guilds/${currentGuild.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }, body: JSON.stringify(updates) });
     const data = await res.json();
     if (data.success) {
       Object.assign(currentGuild, updates);
@@ -1970,7 +1970,7 @@ async function saveGuildEdit() {
 async function regenerateGuildCode() {
   if (!currentGuild) return;
   try {
-    const res = await fetch(`/api/guilds/${currentGuild.id}/invite`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${myUser.token}` } });
+    const res = await fetch(`/api/guilds/${currentGuild.id}/invite`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` } });
     const data = await res.json();
     if (data.code) {
       document.getElementById('guildEditCode').value = data.code;
@@ -1984,7 +1984,7 @@ async function deleteGuildConfirm() {
   if (!currentGuild) return;
   if (!confirm(`Tem certeza que quer deletar "${currentGuild.name}"? Essa acao nao pode ser desfeita.`)) return;
   try {
-    const res = await fetch(`/api/guilds/${currentGuild.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${myUser.token}` } });
+    const res = await fetch(`/api/guilds/${currentGuild.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${authToken}` } });
     const data = await res.json();
     if (data.success) {
       const m = document.getElementById('guildEditModal'); if (m) m.remove();
