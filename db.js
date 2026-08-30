@@ -3,7 +3,12 @@ const fs = require('fs');
 const path = require('path');
 
 const pool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL.includes('?')
+        ? process.env.DATABASE_URL + '&sslmode=require'
+        : process.env.DATABASE_URL + '?sslmode=require',
+      ssl: { rejectUnauthorized: false }
+    })
   : null;
 
 const fileMap = {};
