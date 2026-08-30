@@ -2053,6 +2053,7 @@ let currentVoiceChannel = null;
 
 async function joinVoiceChannel(guildId, channelId) {
   try {
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     const cfg = NOISE_LEVELS[myUser?.settings?.noiseSuppression || 0] || NOISE_LEVELS[0];
     if (cfg.label !== 'Off') localStream = applyNoiseSuppression(localStream, myUser.settings.noiseSuppression);
@@ -2064,6 +2065,7 @@ async function joinVoiceChannel(guildId, channelId) {
     renderGuildChannels();
     startLocalVAD(localStream);
   } catch (e) {
+    console.error('Voice join error:', e);
     if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
       showToast('Permissao do microfone negada. Verifique as configuracoes do navegador.', 'error');
     } else {
@@ -2219,7 +2221,6 @@ socket.on('voiceUserJoined', async ({ socketId, userId, username, channelName })
   showToast(`${username} entrou no canal de voz ${channelName}`, 'info');
   playSound('join');
   if (userId !== myUser?.id) sendBrowserNotification('Canal de voz', `${username} entrou em ${channelName}`);
-  await createVoicePeerOffer(socketId);
 });
 
 socket.on('voiceUserLeft', ({ socketId, userId, username, channelName }) => {
