@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PULSE</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+
+  <!-- ============= WELCOME ============= -->
+  <div id="welcomeScreen" class="screen welcome-screen">
+    <div class="particles" id="particles"></div>
+    <div class="welcome-box">
+      <div class="welcome-logo">⚡</div>
+      <h1>PULSE</h1>
+      <p class="tagline">Conecte-se com o mundo</p>
+      <button class="btn-glow" onclick="showLogin()">Entrar</button>
+      <button class="btn-outline" onclick="showRegister()">Criar Conta</button>
+    </div>
+  </div>
+
+  <!-- ============= LOGIN ============= -->
+  <div id="loginScreen" class="screen auth-screen hidden">
+    <div class="particles"></div>
+    <div class="auth-box">
+      <button class="back-btn" onclick="showWelcome()">← Voltar</button>
+      <div class="auth-header">
+        <div class="auth-icon">⚡</div>
+        <h2>Bem-vindo de volta</h2>
+        <p>Entre na sua conta PULSE</p>
+      </div>
+      <div id="loginError" class="error-msg hidden"></div>
+      <div class="input-group">
+        <input type="text" id="loginEmail" placeholder=" " autofocus>
+        <label>Nome ou email</label>
+      </div>
+      <div class="input-group">
+        <input type="password" id="loginPassword" placeholder=" ">
+        <label>Senha</label>
+      </div>
+      <button class="btn-glow" onclick="doLogin()">Entrar</button>
+      <p class="auth-link">Nao tem conta? <a onclick="showRegister()">Cadastre-se</a></p>
+    </div>
+  </div>
+
+  <!-- ============= REGISTER ============= -->
+  <div id="registerScreen" class="screen auth-screen hidden">
+    <div class="particles"></div>
+    <div class="auth-box">
+      <button class="back-btn" onclick="showWelcome()">← Voltar</button>
+      <div class="auth-header">
+        <div class="auth-icon">✨</div>
+        <h2>Criar Conta</h2>
+        <p>Junte-se ao PULSE</p>
+      </div>
+      <div id="registerError" class="error-msg hidden"></div>
+      <div class="input-group">
+        <input type="text" id="regUsername" placeholder=" " maxlength="20">
+        <label>Nome de usuario</label>
+      </div>
+      <div class="input-group">
+        <input type="email" id="regEmail" placeholder=" ">
+        <label>Email</label>
+      </div>
+      <div class="input-group">
+        <input type="password" id="regPassword" placeholder=" " minlength="4">
+        <label>Senha</label>
+      </div>
+      <button class="btn-glow" onclick="doRegister()">Criar Conta</button>
+      <p class="auth-link">Ja tem conta? <a onclick="showLogin()">Entrar</a></p>
+    </div>
+  </div>
+
+  <!-- ============= AVATAR SELECTION ============= -->
+  <div id="avatarScreen" class="screen auth-screen hidden">
+    <div class="particles"></div>
+    <div class="auth-box wide">
+      <div class="auth-header">
+        <div class="auth-icon">🎨</div>
+        <h2>Personalize seu avatar</h2>
+        <p>Escolha como voce aparece no PULSE</p>
+      </div>
+      <div class="avatar-preview-large" id="avatarPreviewLarge">
+        <span id="avatarPreviewEmoji">👤</span>
+      </div>
+      <div class="section-label">Emojis</div>
+      <div class="emoji-avatar-grid" id="emojiAvatarGrid"></div>
+      <div class="section-label">Cores</div>
+      <div class="color-grid" id="colorGrid"></div>
+      <label class="upload-btn">📷 Upload de foto<input type="file" accept="image/*" hidden onchange="uploadAvatar(event)"></label>
+      <button class="btn-glow" onclick="finishAvatar()">Continuar</button>
+    </div>
+  </div>
+
+  <!-- ============= CHAT ============= -->
+  <div id="chatApp" class="chat-app hidden">
+    <!-- GUILDS SIDEBAR -->
+    <div class="guilds-sidebar" id="guildsSidebar"></div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="server-name" id="guildHeader" style="display:none;justify-content:space-between;align-items:center;">
+        <h3 id="guildHeaderName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></h3>
+        <button class="user-ctrl-btn" onclick="openGuildEditModal()" title="Editar servidor">⚙️</button>
+      </div>
+      <div class="server-name" id="pulseHeader"><h3>⚡ PULSE</h3></div>
+      <!-- DM LIST -->
+      <div class="channels" id="dmSection" style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:4px;">
+        <div class="channel-category" style="display:flex;justify-content:space-between;align-items:center;">
+          MENSAGENS DIRETAS
+          <button class="add-friend-btn" onclick="openAddFriendModal()" title="Nova DM">+</button>
+        </div>
+        <div id="dmList"></div>
+      </div>
+      <div class="channels" id="channelsContainer">
+        <div class="channel-category" style="display:flex;justify-content:space-between;align-items:center;">
+          CANAIS DE TEXTO
+          <button class="add-friend-btn" onclick="openCreateChannelModal()" title="Criar canal">+</button>
+        </div>
+        <div id="textChannels"></div>
+        <div class="channel-category" style="display:flex;justify-content:space-between;align-items:center;">
+          CANAIS DE VOZ
+          <button class="add-friend-btn" onclick="openCreateChannelModal('voice')" title="Criar canal de voz">+</button>
+        </div>
+        <div id="voiceChannels"></div>
+        <div class="channel-category" id="guildSettingsRow" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
+          CONFIG DO SERVIDOR
+          <div style="display:flex;gap:4px;">
+            <button class="add-friend-btn" onclick="openEmojiManager()" title="Gerenciar Emojis">😀</button>
+            <button class="add-friend-btn" onclick="openBotCreator()" title="Criar Bot">🤖</button>
+          </div>
+        </div>
+      </div>
+      <!-- AMIGOS NO SIDEBAR -->
+      <div class="friends-sidebar" id="friendsSidebar">
+        <div class="channel-category" style="display:flex;justify-content:space-between;align-items:center;">
+          AMIGOS
+          <button class="add-friend-btn" onclick="openAddFriendModal()" title="Adicionar amigo">+</button>
+        </div>
+        <div id="friendsListSidebar"></div>
+      </div>
+      <div class="user-panel">
+        <div class="user-avatar" id="myAvatar" onclick="openEditProfileModal()"></div>
+        <div class="user-info" onclick="openEditProfileModal()">
+          <span id="myUsername"></span>
+          <span class="user-status-text" id="myStatus"></span>
+        </div>
+        <div class="user-controls">
+          <button class="user-ctrl-btn" id="userMicBtn" onclick="event.stopPropagation();toggleUserMic()" title="Microfone">🎤</button>
+          <button class="user-ctrl-btn" id="userDeafenBtn" onclick="event.stopPropagation();toggleDeafen()" title="Fones">🎧</button>
+          <button class="user-ctrl-btn" id="userScreenBtn" onclick="event.stopPropagation();toggleScreenShare()" title="Compartilhar tela" style="display:none;">🖥️</button>
+          <button class="user-ctrl-btn" id="userDisconnectBtn" onclick="event.stopPropagation();leaveVoiceChannel()" title="Sair do canal de voz" style="display:none;color:#ed4245;">📞</button>
+          <button class="user-ctrl-btn" onclick="event.stopPropagation(); openSettingsModal()" title="Configuracoes">⚙️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHAT PRINCIPAL -->
+    <div class="chat-main" style="position:relative;">
+      <div class="chat-header">
+        <span class="channel-name">#geral</span>
+        <div class="header-actions">
+          <button class="header-btn" onclick="openGlobalSearch()" title="Pesquisa global">🔍</button>
+          <button class="header-btn" onclick="createThread()" title="Criar thread">🧵</button>
+          <button class="header-btn" onclick="openActivityLog()" title="Atividade">📋</button>
+          <button class="header-btn" onclick="togglePins()">📌 <span id="pinCount">0</span></button>
+          <button class="header-btn" onclick="loadEvents();document.getElementById('eventsPanel').classList.toggle('hidden')" title="Eventos">📅</button>
+          <button class="header-btn" onclick="loadLeaderboard();document.getElementById('leaderboardPanel').classList.toggle('hidden')" title="Leaderboard">🏆</button>
+          <button class="header-btn" onclick="toggleFilesPanel()" title="Arquivos compartilhados">📎</button>
+          <button class="header-btn" onclick="startScreenShare()" title="Compartilhar tela (Ctrl+Shift+S)">🖥️</button>
+          <button class="header-btn" onclick="openAdminPanel()" title="Admin">⚙️</button>
+          <button class="header-btn" onclick="generateInviteLink()" title="Criar link de convite">🔗</button>
+          <div class="online-count"><span id="onlineCount">0</span> online</div>
+        </div>
+      </div>
+
+      <div id="pinsPanel" class="pins-panel hidden">
+        <div class="pins-header"><span>📌 Mensagens Fixadas</span><button onclick="togglePins()">✕</button></div>
+        <div id="pinsList" class="pins-list"></div>
+      </div>
+
+      <div id="filesPanel" class="pins-panel hidden">
+        <div class="pins-header"><span>📎 Arquivos Compartilhados</span><button onclick="toggleFilesPanel()">✕</button></div>
+        <div id="filesList" class="pins-list"></div>
+      </div>
+
+      <!-- Reply preview -->
+      <div id="replyPreview" class="reply-preview hidden">
+        <span>Respondendo a <strong id="replyToName"></strong></span>
+        <span id="replyToText" class="reply-to-text"></span>
+        <button onclick="cancelReply()">✕</button>
+      </div>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="typing-indicator hidden" id="typingIndicator">
+        <span id="typingUser"></span> esta digitando...
+      </div>
+
+      <div id="filePreview" class="file-preview hidden">
+        <div id="filePreviewContent"></div>
+        <button class="remove-file" onclick="removeFilePreview()">✕</button>
+      </div>
+
+      <div class="message-input-area">
+        <div class="input-actions">
+          <label class="input-btn" title="Arquivo">📎<input type="file" hidden onchange="handleFileSelect(event)"></label>
+          <label class="input-btn" title="Imagem">🖼️<input type="file" accept="image/*" hidden onchange="handleFileSelect(event)"></label>
+          <button class="input-btn" id="recordBtn" onclick="toggleRecording()" title="Gravar audio">🎙️</button>
+          <button class="input-btn" onclick="toggleEmojiPicker()" title="Emoji">😀</button>
+        </div>
+        <div id="recordingBar" class="recording-bar hidden">
+          <span class="rec-dot"></span>
+          <span id="recTimer" class="rec-timer">00:00</span>
+          <div id="recWaveform" class="rec-waveform"></div>
+          <button class="rec-cancel" onclick="cancelRecording()">✕</button>
+          <button class="rec-send" onclick="sendRecording()">▶ Enviar</button>
+        </div>
+        <div class="input-row">
+          <input type="text" id="messageInput" placeholder="Enviar mensagem para #geral..." maxlength="2000">
+          <button onclick="sendMessage()">Enviar</button>
+        </div>
+      </div>
+
+      <div id="emojiPicker" class="emoji-picker hidden">
+        <div class="emoji-grid" id="emojiGrid"></div>
+      </div>
+
+      <!-- VOICE PANEL -->
+      <div id="voicePanel" class="voice-panel hidden">
+        <div class="voice-panel-top">
+          <div class="voice-info">
+            <div class="voice-status"><span class="voice-status-dot"></span> Voz conectada</div>
+            <div class="voice-channel-name" id="voiceChannelName">Geral</div>
+            <div class="voice-guild-name" id="voiceGuildName">Servidor</div>
+          </div>
+          <div class="voice-panel-right">
+            <span class="voice-signal" title="Conexao">🔊</span>
+            <span class="voice-timer" id="voiceTimer">00:00</span>
+            <button class="voice-disconnect-btn" onclick="leaveVoiceChannel()" title="Desconectar do canal de voz">📞</button>
+          </div>
+        </div>
+        <div class="voice-panel-actions">
+          <button class="voice-action-btn" id="voiceMuteBtn" onclick="toggleVoiceMute()" title="Mudo">🎤</button>
+          <button class="voice-action-btn" id="deafenBtn" onclick="toggleDeafen()" title="Fones">🎧</button>
+          <button class="voice-action-btn" id="webcamBtn" onclick="toggleWebcam()" title="Ligar webcam">📷</button>
+          <button class="voice-action-btn" id="screenShareBtn" onclick="toggleScreenShare()" title="Compartilhar tela">🖥️</button>
+          <button class="voice-action-btn" onclick="showToast('Convite enviado!', 'success')" title="Convidar pessoas">👥</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMBERS -->
+    <div class="members-sidebar">
+      <div class="members-header">MEMBROS ONLINE</div>
+      <div id="membersList" class="members-list"></div>
+
+      <!-- THREADS PANEL -->
+      <div id="threadPanel" class="thread-panel hidden" style="width:100%;border-left:none;border-top:1px solid var(--border);">
+        <div class="thread-panel-header"><h4>🧵 Threads</h4><button onclick="closeThread()">✕</button></div>
+        <div id="threadsList" class="thread-list"></div>
+        <div class="thread-create-btn"><button onclick="createThread()">+ Criar Thread</button></div>
+      </div>
+
+      <!-- EVENTS PANEL -->
+      <div id="eventsPanel" class="thread-panel hidden" style="width:100%;border-left:none;border-top:1px solid var(--border);">
+        <div class="thread-panel-header"><h4>📅 Eventos</h4><button onclick="this.closest('.thread-panel').classList.add('hidden')">✕</button></div>
+        <div class="events-section">
+          <div class="events-header"><h4>Proximos Eventos</h4><button class="btn-small" onclick="createEvent()">+ Criar</button></div>
+          <div id="eventsList"></div>
+        </div>
+      </div>
+
+      <!-- LEADERBOARD PANEL -->
+      <div id="leaderboardPanel" class="thread-panel hidden" style="width:100%;border-left:none;border-top:1px solid var(--border);">
+        <div class="thread-panel-header"><h4>🏆 Leaderboard</h4><button onclick="this.closest('.thread-panel').classList.add('hidden')">✕</button></div>
+        <div class="leaderboard-section"><div id="leaderboardList"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= MODALS ============= -->
+
+  <!-- PERFIL DO USUARIO -->
+  <div id="profileModal" class="modal hidden">
+    <div class="modal-content profile-modal">
+      <button class="modal-close" onclick="closeModal('profileModal')">✕</button>
+      <div class="profile-banner" id="profileBanner"></div>
+      <div class="profile-avatar-large" id="profileAvatarLarge"></div>
+      <h3 id="profileName"></h3>
+      <p class="profile-custom-status" id="profileCustomStatus"></p>
+      <div class="profile-section"><h4>Sobre mim</h4><p id="profileBio">Nenhuma bio.</p></div>
+      <div class="profile-section"><h4>Membro desde</h4><p id="profileJoined"></p></div>
+      <div class="profile-section" id="profileStats">
+        <h4>Estatisticas</h4>
+        <div class="stats-grid">
+          <div class="stat"><span class="stat-value" id="profileMsgCount">0</span><span class="stat-label">Mensagens</span></div>
+          <div class="stat"><span class="stat-value" id="profileReactCount">0</span><span class="stat-label">Reacoes</span></div>
+        </div>
+      </div>
+      <div class="profile-actions" id="profileActions"></div>
+    </div>
+  </div>
+
+  <!-- EDITAR PERFIL -->
+  <div id="editProfileModal" class="modal hidden">
+    <div class="modal-content wide">
+      <h3>Editar Perfil</h3>
+      <div class="edit-profile-grid">
+        <div>
+          <label>Status</label>
+          <select id="editStatus">
+            <option value="online">🟢 Online</option>
+            <option value="idle">🟡 Ausente</option>
+            <option value="dnd">🔴 Nao perturbe</option>
+            <option value="invisible">⚫ Invisivel</option>
+          </select>
+          <label>Status Personalizado</label>
+          <input type="text" id="editCustomStatus" placeholder="O que esta fazendo?" maxlength="50">
+          <label>Sobre mim</label>
+          <input type="text" id="editBio" placeholder="Conte sobre voce..." maxlength="200">
+        </div>
+        <div>
+          <label>Avatar</label>
+          <div class="avatar-preview-small" id="editAvatarPreview"></div>
+          <div class="emoji-avatar-grid small" id="editEmojiGrid"></div>
+          <div class="color-grid small" id="editColorGrid"></div>
+          <label>Banner</label>
+          <div class="color-grid small" id="editBannerGrid"></div>
+          <label class="upload-btn small">📷 Foto<input type="file" accept="image/*" hidden onchange="uploadAvatarEdit(event)"></label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeModal('editProfileModal')">Cancelar</button>
+        <button class="modal-confirm" onclick="saveProfile()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD AMIGO -->
+  <div id="addFriendModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Adicionar Amigo</h3>
+      <div id="addFriendError" class="error-msg hidden"></div>
+      <div class="input-group"><input type="text" id="friendSearchInput" placeholder=" " oninput="searchUsers()"><label>Nome do usuario</label></div>
+      <div id="friendSearchResults" class="search-results"></div>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeModal('addFriendModal')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRIAR CANAL -->
+  <div id="createChannelModal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="createChannelTitle">Criar Canal</h3>
+      <div id="createChannelError" class="error-msg hidden"></div>
+      <label>Nome do canal</label>
+      <div class="input-group"><input type="text" id="channelNameInput" placeholder=" " maxlength="30"><label>nome-do-canal</label></div>
+      <label>Icone do canal</label>
+      <div class="accent-colors" id="channelIconPicker">
+        <button class="accent-btn active" style="font-size:18px;" onclick="selectChannelIcon('💬',this)">💬</button>
+        <button class="accent-btn" style="font-size:18px;" onclick="selectChannelIcon('📢',this)">📢</button>
+        <button class="accent-btn" style="font-size:18px;" onclick="selectChannelIcon('🎮',this)">🎮</button>
+        <button class="accent-btn" style="font-size:18px;" onclick="selectChannelIcon('🎵',this)">🎵</button>
+        <button class="accent-btn" style="font-size:18px;" onclick="selectChannelIcon('📚',this)">📚</button>
+        <button class="accent-btn" style="font-size:18px;" onclick="selectChannelIcon('⚡',this)">⚡</button>
+        <button class="accent-btn" style="font-size:18px;" onclick="selectChannelIcon('💡',this)">💡</button>
+        <button class="accent-btn" style="font-size:18px;" onclick="selectChannelIcon('🎯',this)">🎯</button>
+      </div>
+      <input type="hidden" id="selectedChannelIcon" value="💬">
+      <label>Tipo</label>
+      <select id="channelTypeSelect" onchange="toggleVoicePermissionsSection()">
+        <option value="text">💬 Texto</option>
+        <option value="voice">🔊 Voz</option>
+      </select>
+      <div id="voicePermissionsSection" style="display:none;margin-top:12px;">
+        <label style="font-weight:600;margin-bottom:6px;display:block;">Permissoes do canal</label>
+        <label class="toggle-label">
+          <input type="checkbox" id="permSeeChannel" checked>
+          <span class="toggle-slider"></span>
+          👁 Ver canal
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="permConnect" checked>
+          <span class="toggle-slider"></span>
+          🔌 Conectar
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="permSpeak" checked>
+          <span class="toggle-slider"></span>
+          🎤 Falar
+        </label>
+      </div>
+      <label class="toggle-label" style="margin-top:12px;">
+        <input type="checkbox" id="channelPrivateCheck">
+        <span class="toggle-slider"></span>
+        🔒 Privado (so convidados)
+      </label>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeModal('createChannelModal')">Cancelar</button>
+        <button class="modal-confirm" onclick="createChannel()">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIGURACOES -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-content wide">
+      <h3>Configuracoes</h3>
+      <div class="settings-grid">
+        <div class="settings-section">
+          <h4>Aparencia</h4>
+          <label>Tema</label>
+          <select id="settingTheme" onchange="applyTheme(this.value)">
+            <option value="dark">Escuro</option>
+            <option value="light">Claro</option>
+          </select>
+          <label>Tamanho da fonte</label>
+          <select id="settingFontSize" onchange="applyFontSize(this.value)">
+            <option value="12">Pequeno</option>
+            <option value="14">Normal</option>
+            <option value="16">Grande</option>
+            <option value="18">Muito Grande</option>
+          </select>
+        </div>
+        <div class="settings-section">
+          <h4>Notificacoes</h4>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingNotifications" onchange="toggleSetting('notifications', this.checked)">
+            <span class="toggle-slider"></span>
+            Notificacoes
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingSounds" onchange="toggleSetting('sounds', this.checked)">
+            <span class="toggle-slider"></span>
+            Sons
+          </label>
+        </div>
+        <div class="settings-section">
+          <h4>Seguranca</h4>
+          <label>Senha atual</label>
+          <input type="password" id="settingOldPass" placeholder="Senha atual">
+          <label>Nova senha</label>
+          <input type="password" id="settingNewPass" placeholder="Nova senha">
+          <button class="btn-small" onclick="changePassword()">Trocar Senha</button>
+        </div>
+        <div class="settings-section">
+          <h4>Privacidade</h4>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingPrivateProfile" onchange="updatePrivacy({privateProfile: this.checked})">
+            <span class="toggle-slider"></span>
+            Perfil privado
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingDmOnlyFriends" onchange="updatePrivacy({dmOnlyFriends: this.checked})">
+            <span class="toggle-slider"></span>
+            DM so para amigos
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingShowStatus" onchange="updatePrivacy({showStatus: this.checked})">
+            <span class="toggle-slider"></span>
+            Mostrar status
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingShowBio" onchange="updatePrivacy({showBio: this.checked})">
+            <span class="toggle-slider"></span>
+            Mostrar bio
+          </label>
+          <button class="btn-small" onclick="openBlockedModal()" style="margin-top:8px;">🚫 Bloqueados</button>
+        </div>
+        <div class="settings-section">
+          <h4>Sua Conta</h4>
+          <p class="account-info" id="accountInfo"></p>
+          <button class="btn-danger" onclick="logout()">Sair da conta</button>
+        </div>
+        <div class="settings-section">
+          <h4>Mensagens</h4>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingCompactEmbeds" onchange="toggleSetting('compactEmbeds', this.checked)">
+            <span class="toggle-slider"></span>
+            Compactar embeds
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingAutoUpload" onchange="toggleSetting('autoUpload', this.checked)">
+            <span class="toggle-slider"></span>
+            Auto-upload de imagens
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingPasteImages" onchange="toggleSetting('pasteImages', this.checked)">
+            <span class="toggle-slider"></span>
+            Colar imagens do clipboard
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingInlineEmbeds" onchange="toggleSetting('inlineEmbeds', this.checked)">
+            <span class="toggle-slider"></span>
+            Mostrar embeds inline
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingMarkdown" onchange="toggleSetting('markdown', this.checked)">
+            <span class="toggle-slider"></span>
+            Renderizar Markdown
+          </label>
+        </div>
+        <div class="settings-section">
+          <h4>Audio & Video</h4>
+          <label>Qualidade de audio</label>
+          <select id="settingAudioQuality" onchange="toggleSetting('audioQuality', this.value)">
+            <option value="low">Baixa (32kbps)</option>
+            <option value="medium">Media (64kbps)</option>
+            <option value="high">Alta (128kbps)</option>
+            <option value="very-high">Muito Alta (256kbps)</option>
+          </select>
+          <label>Camera padrao</label>
+          <select id="settingDefaultCamera" onchange="toggleSetting('defaultCamera', this.value)">
+            <option value="user">Frontal</option>
+            <option value="environment">Traseira</option>
+          </select>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingPushToTalk" onchange="toggleSetting('pushToTalk', this.checked)">
+            <span class="toggle-slider"></span>
+            Push-to-Talk
+          </label>
+          <label>Supressao de ruido</label>
+          <div class="slider-row">
+            <span class="slider-label">Off</span>
+            <input type="range" id="settingNoiseSuppression" min="0" max="4" value="0" oninput="applyNoiseLevel(+this.value);document.getElementById('noiseSupVal').textContent=['Off','Leve','Medio','Forte','Max'][this.value]" style="flex:1;accent-color:var(--accent);">
+            <span id="noiseSupVal" class="slider-value">Off</span>
+          </div>
+          <label>Volume do microfone</label>
+          <input type="range" id="settingMicGain" min="0" max="200" value="100" oninput="toggleSetting('micGain', this.value);document.getElementById('micGainVal').textContent=this.value+'%'" style="width:100%;accent-color:var(--accent);">
+          <span id="micGainVal" style="font-size:12px;color:var(--muted);">100%</span>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingAutoGain" onchange="toggleSetting('autoGain', this.checked)">
+            <span class="toggle-slider"></span>
+            Auto-ganho
+          </label>
+          <label>Sensibilidade do microfone (VAD)</label>
+          <div class="slider-row">
+            <span class="slider-label">10</span>
+            <input type="range" id="settingVadThreshold" min="10" max="100" value="37" oninput="window.vadThreshold=+this.value;toggleSetting('vadThreshold',this.value);document.getElementById('vadThreshVal').textContent=this.value" style="flex:1;accent-color:var(--accent);">
+            <span id="vadThreshVal" class="slider-value">37</span>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h4>Acessibilidade</h4>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingHighContrast" onchange="toggleSetting('highContrast', this.checked);applyAccessibility()">
+            <span class="toggle-slider"></span>
+            Alto contraste
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingReduceMotion" onchange="toggleSetting('reduceMotion', this.checked);applyAccessibility()">
+            <span class="toggle-slider"></span>
+            Reduzir movimento
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingScreenReader" onchange="toggleSetting('screenReader', this.checked)">
+            <span class="toggle-slider"></span>
+            Modo leitor de tela
+          </label>
+          <label>Tamanho dos emojis</label>
+          <select id="settingEmojiSize" onchange="toggleSetting('emojiSize', this.value);applyAccessibility()">
+            <option value="small">Pequeno</option>
+            <option value="medium" selected>Normal</option>
+            <option value="large">Grande</option>
+            <option value="xlarge">Muito Grande</option>
+          </select>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingDisableAutoplay" onchange="toggleSetting('disableAutoplay', this.checked)">
+            <span class="toggle-slider"></span>
+            Desativar autoplay de GIFs
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingTextToSpeech" onchange="toggleSetting('textToSpeech', this.checked)">
+            <span class="toggle-slider"></span>
+            Text-to-Speech nas mensagens
+          </label>
+        </div>
+        <div class="settings-section">
+          <h4>Idioma & Personalizacao</h4>
+          <label>Idioma da interface</label>
+          <select id="settingLanguage" onchange="toggleSetting('language', this.value)">
+            <option value="pt-BR">Portugues (Brasil)</option>
+            <option value="en-US">English (US)</option>
+            <option value="es">Espanol</option>
+            <option value="ja">Japones</option>
+            <option value="de">Alemao</option>
+          </select>
+          <label>Cor de destaque</label>
+          <div class="accent-colors" id="accentColors">
+            <button class="accent-btn active" style="background:#5865F2" onclick="applyAccent('#5865F2',this)" title="Discord"></button>
+            <button class="accent-btn" style="background:#EB459E" onclick="applyAccent('#EB459E',this)" title="Pink"></button>
+            <button class="accent-btn" style="background:#57F287" onclick="applyAccent('#57F287',this)" title="Verde"></button>
+            <button class="accent-btn" style="background:#FEE75C" onclick="applyAccent('#FEE75C',this)" title="Amarelo"></button>
+            <button class="accent-btn" style="background:#ED4245" onclick="applyAccent('#ED4245',this)" title="Vermelho"></button>
+            <button class="accent-btn" style="background:#EB459E" onclick="applyAccent('#9B59B6',this)" title="Roxo"></button>
+            <button class="accent-btn" style="background:#E67E22" onclick="applyAccent('#E67E22',this)" title="Laranja"></button>
+          </div>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingAnimations" onchange="toggleSetting('animations', this.checked);applyAccessibility()">
+            <span class="toggle-slider"></span>
+            Animacoes
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingShowTimestamps" onchange="toggleSetting('showTimestamps', this.checked)">
+            <span class="toggle-slider"></span>
+            Mostrar timestamps
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="settingCompactMode" onchange="toggleSetting('compactMode', this.checked);applyAccessibility()">
+            <span class="toggle-slider"></span>
+            Modo compacto
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeModal('settingsModal')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT MSG -->
+  <div id="editModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Editar Mensagem</h3>
+      <input type="text" id="editInput">
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeModal('editModal')">Cancelar</button>
+        <button class="modal-confirm" onclick="confirmEdit()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELETE MSG -->
+  <div id="deleteModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Apagar Mensagem</h3>
+      <p>Tem certeza?</p>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeModal('deleteModal')">Cancelar</button>
+        <button class="modal-confirm danger" onclick="confirmDelete()">Apagar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTEXT MENU -->
+  <div id="contextMenu" class="context-menu hidden">
+    <div class="context-item" onclick="contextReply()">💬 Responder</div>
+    <div class="context-item" onclick="contextEdit()">✏️ Editar</div>
+    <div class="context-item" onclick="contextDelete()">🗑️ Apagar</div>
+    <div class="context-item" onclick="contextPin()">📌 Fixar</div>
+    <div class="context-divider"></div>
+    <div class="context-item" onclick="contextReact('👍')">👍 Curtir</div>
+    <div class="context-item" onclick="contextReact('❤️')">❤️ Amor</div>
+    <div class="context-item" onclick="contextReact('😂')">😂 Kkkk</div>
+    <div class="context-item" onclick="contextReact('😮')">😮 Uau</div>
+    <div class="context-item" onclick="contextReact('😢')">😢 Triste</div>
+    <div class="context-item" onclick="contextReact('🔥')">🔥 Fire</div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>

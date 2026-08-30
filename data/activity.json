@@ -1,0 +1,23 @@
+[
+  {
+    "type": "channel_delete",
+    "channelId": "voz-geral",
+    "channelName": "Geral",
+    "userId": "mtdliys4nhg4v",
+    "timestamp": "2026-08-29T00:50:01.162Z"
+  },
+  {
+    "type": "channel_delete",
+    "channelId": "voz-gaming",
+    "channelName": "Gaming",
+    "userId": "mtdliys4nhg4v",
+    "timestamp": "2026-08-29T00:50:03.129Z"
+  },
+  {
+    "type": "channel_create",
+    "channelId": "fala-merdao",
+    "channelName": "fala-merdao",
+    "userId": "mtdliys4nhg4v",
+    "timestamp": "2026-08-29T01:28:38.580Z"
+  }
+]

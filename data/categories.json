@@ -1,0 +1,12 @@
+{
+  "texto": {
+    "id": "texto",
+    "name": "Texto",
+    "position": 0
+  },
+  "voz": {
+    "id": "voz",
+    "name": "Voz",
+    "position": 1
+  }
+}

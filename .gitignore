@@ -1,0 +1,15 @@
+node_modules/
+data/users.json
+data/guilds.json
+data/messages.json
+data/channels.json
+data/channel_invites.json
+data/.secret
+public/uploads/avatars/*
+public/uploads/*.png
+public/uploads/*.jpg
+public/uploads/*.jpeg
+public/uploads/*.webm
+public/uploads/*.webp
+public/uploads/guild-*
+!public/uploads/.gitkeep
