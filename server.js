@@ -1719,6 +1719,22 @@ function processMentions(text, guild, db) {
 // Screen share signaling (extra events no mesmo socket)
 // Os eventos de video/screen share usam os mesmos voiceOffer/voiceAnswer/voiceIceCandidate
 
+// ============= TURN/STUN ICE CONFIG =============
+app.get('/api/ice-config', (req, res) => {
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ];
+  if (process.env.TURN_URL) {
+    iceServers.push({
+      urls: process.env.TURN_URL,
+      username: process.env.TURN_USERNAME || '',
+      credential: process.env.TURN_CREDENTIAL || ''
+    });
+  }
+  res.json({ iceServers });
+});
+
 const PORT = process.env.PORT || 3000;
 
 (async () => {

@@ -2205,24 +2205,32 @@ function renderVoiceUsersInSidebar() {
   });
 }
 
-const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+let ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+fetch('/api/ice-config').then(r => r.json()).then(d => { if (d.iceServers) ICE_SERVERS = { iceServers: d.iceServers }; }).catch(() => {});
+
+function voiceDebug(msg) {
+  console.log('[VOICE]', msg);
+  const el = document.getElementById('voiceDebugPanel');
+  if (el) el.innerHTML += `<div style="font-size:11px;padding:2px 0;border-bottom:1px solid #333;">${new Date().toLocaleTimeString()} ${msg}</div>`;
+}
 
 socket.on('voiceConnected', async ({ peers, guildId, channelId }) => {
-  console.log('[VOICE] Connected. Peers:', peers.length, 'localStream:', !!localStream, 'tracks:', localStream?.getTracks().length);
+  voiceDebug(`Conectado. Peers: ${peers.length} | Stream: ${!!localStream} | Tracks: ${localStream?.getTracks().length || 0}`);
   const ch = allChannels[channelId] || {};
   showToast(`Conectado ao canal de voz ${ch.name || channelId}`, 'success');
   sendBrowserNotification('Conectado ao canal de voz', ch.name || channelId);
   playSound('join');
   startVoiceTimer();
   for (const peer of peers) {
-    console.log('[VOICE] Creating offer for peer:', peer.socketId, peer.username);
-    try { await createVoicePeerOffer(peer.socketId); } catch(e) { console.error('[VOICE] Offer error:', e); }
+    voiceDebug(`Criando offer pra ${peer.username} (${peer.socketId})`);
+    try { await createVoicePeerOffer(peer.socketId); } catch(e) { voiceDebug(`ERRO offer: ${e.message}`); }
   }
   showVoicePanel();
   renderGuildChannels();
 });
 
 socket.on('voiceUserJoined', async ({ socketId, userId, username, channelName }) => {
+  voiceDebug(`${username} entrou no canal`);
   showToast(`${username} entrou no canal de voz ${channelName}`, 'info');
   playSound('join');
   if (userId !== myUser?.id) sendBrowserNotification('Canal de voz', `${username} entrou em ${channelName}`);
@@ -2259,15 +2267,16 @@ socket.on('videoTypeChanged', ({ socketId, videoType }) => {
 });
 
 socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
-  console.log('[VOICE] Received offer from:', fromSocketId);
+  voiceDebug(`Recebendo offer de ${fromSocketId}`);
   const pc = new RTCPeerConnection(ICE_SERVERS);
   voicePeers[fromSocketId] = { pc };
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  pc.oniceconnectionstatechange = () => console.log('[VOICE] Answerer ICE state:', pc.iceConnectionState, 'from', fromSocketId);
+  pc.oniceconnectionstatechange = () => voiceDebug(`ICE(Answerer): ${pc.iceConnectionState} <- ${fromSocketId}`);
   if (screenStream) {
     screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
   }
   pc.ontrack = (e) => {
+    voiceDebug(`Track recebida: ${e.track.kind} de ${fromSocketId}`);
     if (e.track.kind === 'video') {
       const vu = Object.values(voiceChannelUsers).flat().find(u => u.socketId === fromSocketId);
       const userId = vu?.userId || fromSocketId;

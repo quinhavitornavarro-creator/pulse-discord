@@ -14,3 +14,9 @@ services:
         fromDatabase:
           name: lucasvitor-db
           property: connectionString
+      - key: TURN_URL
+        value: ""
+      - key: TURN_USERNAME
+        value: ""
+      - key: TURN_CREDENTIAL
+        value: ""
