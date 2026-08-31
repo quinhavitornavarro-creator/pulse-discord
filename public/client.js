@@ -2275,6 +2275,19 @@ socket.on('videoTypeChanged', ({ socketId, videoType }) => {
 
 socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
   voiceDebug(`Recebendo offer de ${fromSocketId}`);
+  let existing = voicePeers[fromSocketId]?.pc;
+  if (existing && existing.signalingState !== 'closed') {
+    try {
+      if (existing.signalingState !== 'stable') {
+        await existing.setLocalDescription({ type: 'rollback' });
+      }
+      await existing.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await existing.createAnswer();
+      await existing.setLocalDescription(answer);
+      socket.emit('voiceAnswer', { answer, targetSocketId: fromSocketId });
+      return;
+    } catch(e) { console.log('[VOICE] renegotiate answer error:', e); }
+  }
   const pc = new RTCPeerConnection(ICE_SERVERS);
   voicePeers[fromSocketId] = { pc };
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
@@ -2284,12 +2297,14 @@ socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
   }
   pc.ontrack = (e) => {
     voiceDebug(`Track recebida: ${e.track.kind} de ${fromSocketId}`);
+    console.log('[VOICE] ontrack:', e.track.kind, 'from:', fromSocketId, 'streams:', e.streams.length, 'videoType:', remoteVideoTypes[fromSocketId]);
     if (e.track.kind === 'video') {
       const vu = Object.values(voiceChannelUsers).flat().find(u => u.socketId === fromSocketId);
       const userId = vu?.userId || fromSocketId;
       if (remoteVideoTypes[fromSocketId] === 'webcam') {
         addWebcamVideo(userId, e.streams[0], false);
       } else {
+        console.log('[VOICE] calling addScreenShareVideo for', fromSocketId);
         addScreenShareVideo(fromSocketId, e.streams[0]);
       }
     } else {
@@ -2351,25 +2366,49 @@ function addVoicePeerAudio(socketId, stream) {
 }
 
 function addScreenShareVideo(socketId, stream) {
+  if (!stream) { console.log('[SS] addScreenShareVideo: no stream for', socketId); return; }
+  console.log('[SS] addScreenShareVideo:', socketId, 'tracks:', stream.getTracks().length);
   let panel = document.getElementById(`remoteScreen-${socketId}`);
   if (!panel) {
     panel = document.createElement('div');
     panel.id = `remoteScreen-${socketId}`;
     panel.className = 'ss-floating-panel';
+    panel.style.position = 'fixed';
+    panel.style.bottom = '80px';
+    panel.style.right = '16px';
+    panel.style.width = '320px';
+    panel.style.background = '#0d0d1a';
+    panel.style.border = '2px solid #5865f2';
+    panel.style.borderRadius = '10px';
+    panel.style.overflow = 'hidden';
+    panel.style.zIndex = '9999';
+    panel.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
     const video = document.createElement('video');
     video.autoplay = true;
     video.playsInline = true;
+    video.muted = false;
     video.srcObject = stream;
+    video.style.width = '100%';
+    video.style.display = 'block';
     panel.appendChild(video);
     const controls = createScreenShareControls(video, false);
-    panel.appendChild(controls);
+    if (controls) panel.appendChild(controls);
     const vu = Object.values(voiceChannelUsers).flat().find(u => u.socketId === socketId);
     const label = document.createElement('div');
     label.className = 'screen-share-view-label';
+    label.style.padding = '6px 10px';
+    label.style.background = 'rgba(0,0,0,0.5)';
+    label.style.fontSize = '12px';
+    label.style.color = '#fff';
     label.innerHTML = `<span class="live-dot"></span> 🔴 Tela de ${vu?.username || 'Alguem'}`;
     panel.appendChild(label);
-    const chatMain = document.querySelector('.chat-main');
-    if (chatMain) chatMain.appendChild(panel);
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'position:absolute;top:6px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;z-index:10;';
+    closeBtn.onclick = () => { panel.remove(); };
+    panel.appendChild(closeBtn);
+    document.body.appendChild(panel);
+    console.log('[SS] panel appended to body for', socketId);
   }
   const video = panel.querySelector('video');
   if (video) video.srcObject = stream;
@@ -3146,51 +3185,58 @@ let webcamOn = false;
 
 async function startScreenShare() {
   try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: true });
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false });
     const track = screenStream.getVideoTracks()[0];
     track.onended = () => stopScreenShare();
     screenSharing = true;
     socket.emit('screenShareStart', {});
+    socket.emit('videoTypeChanged', { videoType: 'screen' });
 
+    console.log('[SCREEN] voicePeers:', Object.keys(voicePeers));
     for (const [socketId, peer] of Object.entries(voicePeers)) {
-      if (peer.pc) {
-        const videoSender = peer.pc.getSenders().find(s => s.track?.kind === 'video');
-        if (videoSender) {
-          videoSender.replaceTrack(track);
-        } else {
+      if (peer.pc && peer.pc.signalingState !== 'closed') {
+        try {
           peer.pc.addTrack(track, screenStream);
-        }
-        const audioTrack = screenStream.getAudioTracks()[0];
-        if (audioTrack) {
-          const audioSender = peer.pc.getSenders().find(s => s.track?.kind === 'audio' && s !== peer.pc.getSenders().find(ss => ss.track === localStream?.getAudioTracks()[0]));
-          if (audioSender) {
-            audioSender.replaceTrack(audioTrack);
-          } else {
-            peer.pc.addTrack(audioTrack, screenStream);
+          console.log('[SCREEN] added track to voice PC for', socketId, 'state:', peer.pc.signalingState);
+          if (peer.pc.signalingState === 'stable') {
+            const offer = await peer.pc.createOffer();
+            await peer.pc.setLocalDescription(offer);
+            socket.emit('voiceOffer', { offer, targetSocketId: socketId });
+            console.log('[SCREEN] sent voiceOffer (renegotiate) to', socketId);
           }
-        }
+        } catch(e) { console.log('[SCREEN] renegotiate error:', e); }
       }
     }
     showScreenShareOverlay(true);
     addLocalScreenPreview(screenStream);
-    socket.emit('videoTypeChanged', { videoType: 'screen' });
     playSound('screenshare');
     showToast('Voce esta compartilhando a tela!', 'success');
   } catch (e) { showToast('Compartilhamento cancelado', 'error'); }
 }
 
 function stopScreenShare() {
-  if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+  if (screenStream) {
+    const track = screenStream.getVideoTracks()[0];
+    for (const [socketId, peer] of Object.entries(voicePeers)) {
+      if (peer.pc && peer.pc.signalingState !== 'closed') {
+        const sender = peer.pc.getSenders().find(s => s.track === track);
+        if (sender) {
+          try { peer.pc.removeTrack(sender); } catch(e) {}
+        }
+        if (peer.pc.signalingState === 'stable') {
+          peer.pc.createOffer().then(offer => {
+            peer.pc.setLocalDescription(offer);
+            socket.emit('voiceOffer', { offer, targetSocketId: socketId });
+          }).catch(() => {});
+        }
+      }
+    }
+    screenStream.getTracks().forEach(t => t.stop());
+    screenStream = null;
+  }
   screenSharing = false;
   socket.emit('screenShareStop', {});
   playSound('screenshareStop');
-
-  for (const [socketId, peer] of Object.entries(voicePeers)) {
-    if (peer.pc) {
-      const sender = peer.pc.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) sender.replaceTrack(null);
-    }
-  }
   showScreenShareOverlay(false);
   removeLocalScreenPreview();
   socket.emit('videoTypeChanged', { videoType: webcamOn ? 'webcam' : 'none' });
@@ -3421,6 +3467,45 @@ socket.on('screenShareStopped', ({ socketId }) => {
   const badge = document.getElementById(`live-badge-${socketId}`);
   if (badge) badge.remove();
   showToast('Compartilhamento de tela encerrado', 'info');
+});
+
+const screenSharePeers = {};
+
+socket.on('ssOffer', async ({ offer, fromSocketId }) => {
+  try {
+    let pc = screenSharePeers[fromSocketId];
+    if (!pc || pc.signalingState === 'closed') {
+      pc = new RTCPeerConnection(ICE_SERVERS);
+      screenSharePeers[fromSocketId] = pc;
+      pc.ontrack = (e) => {
+        console.log('[SS] ontrack:', e.track.kind, 'streams:', e.streams.length);
+        if (e.track.kind === 'video') {
+          const stream = e.streams[0] || new MediaStream([e.track]);
+          addScreenShareVideo(fromSocketId, stream);
+        }
+      };
+      pc.onicecandidate = (e) => { if (e.candidate) socket.emit('ssIceCandidate', { candidate: e.candidate, targetSocketId: fromSocketId }); };
+    }
+    if (pc.signalingState !== 'stable') {
+      await pc.setLocalDescription({ type: 'rollback' });
+    }
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('ssAnswer', { answer, targetSocketId: fromSocketId });
+  } catch(e) { console.log('[SS] offer error:', e); }
+});
+
+socket.on('ssAnswer', async ({ answer, fromSocketId }) => {
+  try {
+    const pc = screenSharePeers[fromSocketId];
+    if (pc && pc.signalingState !== 'closed') await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  } catch(e) { console.log('[SS] answer error:', e); }
+});
+
+socket.on('ssIceCandidate', ({ candidate, fromSocketId }) => {
+  const pc = screenSharePeers[fromSocketId];
+  if (pc && pc.signalingState !== 'closed') pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
 });
 
 // Atalho Ctrl+Shift+S pra screen share

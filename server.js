@@ -232,8 +232,23 @@ app.post('/api/login', authLimiter, async (req, res) => {
     const { login, password } = req.body;
     if (!login || !password) return res.status(400).json({ error: 'Preencha todos os campos' });
 
-    const db = loadDB(DB_FILE);
-    const user = Object.values(db).find(u => u.username.toLowerCase() === login.toLowerCase() || u.email.toLowerCase() === login.toLowerCase());
+    let db = loadDB(DB_FILE);
+    let user = Object.values(db).find(u => u.username && u.username.toLowerCase() === login.toLowerCase() || (u.email && u.email.toLowerCase() === login.toLowerCase()));
+
+    if (!user && pool) {
+      try {
+        const pgRes = await pool.query('SELECT key, data FROM kv WHERE collection = $1', ['users']);
+        for (const row of pgRes.rows) {
+          if (row.data.username && row.data.username.toLowerCase() === login.toLowerCase() || (row.data.email && row.data.email.toLowerCase() === login.toLowerCase())) {
+            user = row.data;
+            db[row.key] = row.data;
+            saveDB(DB_FILE, db);
+            break;
+          }
+        }
+      } catch (pgErr) { console.error('PG login fallback error:', pgErr.message); }
+    }
+
     if (!user) return res.status(400).json({ error: 'Usuario nao encontrado' });
     if (!(await bcrypt.compare(password, user.password))) return res.status(400).json({ error: 'Senha incorreta' });
 
@@ -1342,6 +1357,18 @@ io.on('connection', (socket) => {
     for (const [sid, v] of voiceUsers) {
       if (sid !== socket.id && v.key === vu.key) io.to(sid).emit('screenShareStopped', { socketId: socket.id });
     }
+  });
+
+  socket.on('ssOffer', (data) => {
+    io.to(data.targetSocketId).emit('ssOffer', { offer: data.offer, fromSocketId: socket.id });
+  });
+
+  socket.on('ssAnswer', (data) => {
+    io.to(data.targetSocketId).emit('ssAnswer', { answer: data.answer, fromSocketId: socket.id });
+  });
+
+  socket.on('ssIceCandidate', (data) => {
+    io.to(data.targetSocketId).emit('ssIceCandidate', { candidate: data.candidate, fromSocketId: socket.id });
   });
 
   // Thread reply
