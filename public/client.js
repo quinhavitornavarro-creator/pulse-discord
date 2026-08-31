@@ -2414,6 +2414,23 @@ function addVoicePeerAudio(socketId, stream) {
 function addScreenShareVideo(socketId, stream) {
   if (!stream) { console.log('[SS] addScreenShareVideo: no stream for', socketId); return; }
   console.log('[SS] addScreenShareVideo:', socketId, 'tracks:', stream.getTracks().length);
+  const popup = document.getElementById(`ssPopup-${socketId}`);
+  if (popup) {
+    const container = document.getElementById(`ssVideoContainer-${socketId}`);
+    if (container) {
+      let video = container.querySelector('video');
+      if (!video) {
+        container.innerHTML = '';
+        video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = false;
+        video.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+        container.appendChild(video);
+      }
+      video.srcObject = stream;
+    }
+  }
   let panel = document.getElementById(`remoteScreen-${socketId}`);
   if (!panel) {
     panel = document.createElement('div');
@@ -2422,13 +2439,18 @@ function addScreenShareVideo(socketId, stream) {
     panel.style.position = 'fixed';
     panel.style.bottom = '80px';
     panel.style.right = '16px';
-    panel.style.width = '320px';
+    panel.style.width = '280px';
     panel.style.background = '#0d0d1a';
     panel.style.border = '2px solid #5865f2';
     panel.style.borderRadius = '10px';
     panel.style.overflow = 'hidden';
     panel.style.zIndex = '9999';
     panel.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
+    panel.style.cursor = 'pointer';
+    panel.onclick = () => {
+      const p = document.getElementById(`ssPopup-${socketId}`);
+      if (p) { p.style.display = p.style.display === 'none' ? '' : 'none'; }
+    };
     const video = document.createElement('video');
     video.autoplay = true;
     video.playsInline = true;
@@ -2437,8 +2459,6 @@ function addScreenShareVideo(socketId, stream) {
     video.style.width = '100%';
     video.style.display = 'block';
     panel.appendChild(video);
-    const controls = createScreenShareControls(video, false);
-    if (controls) panel.appendChild(controls);
     const vu = Object.values(voiceChannelUsers).flat().find(u => u.socketId === socketId);
     const label = document.createElement('div');
     label.className = 'screen-share-view-label';
@@ -2451,7 +2471,7 @@ function addScreenShareVideo(socketId, stream) {
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '✕';
     closeBtn.style.cssText = 'position:absolute;top:6px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px;z-index:10;';
-    closeBtn.onclick = () => { panel.remove(); };
+    closeBtn.onclick = (e) => { e.stopPropagation(); panel.remove(); };
     panel.appendChild(closeBtn);
     document.body.appendChild(panel);
     console.log('[SS] panel appended to body for', socketId);
@@ -3247,6 +3267,24 @@ async function startScreenShare() {
         } catch(e) { console.log('[SCREEN] addTrack error:', e); }
       }
     }
+
+    for (const [socketId, peer] of Object.entries(voicePeers)) {
+      if (peer.pc) {
+        try {
+          const ssPc = new RTCPeerConnection(ICE_SERVERS);
+          screenSharePeers[socketId] = ssPc;
+          ssPc.addTrack(track, screenStream);
+          ssPc.ontrack = () => {};
+          ssPc.onicecandidate = (e) => { if (e.candidate) socket.emit('ssIceCandidate', { candidate: e.candidate, targetSocketId: socketId }); };
+          ssPc.oniceconnectionstatechange = () => console.log('[SS] sender ICE:', ssPc.iceConnectionState, '->', socketId);
+          const o = await ssPc.createOffer();
+          await ssPc.setLocalDescription(o);
+          socket.emit('ssOffer', { offer: o, targetSocketId: socketId });
+          console.log('[SCREEN] sent ssOffer to', socketId);
+        } catch(e) { console.log('[SCREEN] ssOffer error:', e); }
+      }
+    }
+
     showScreenShareOverlay(true);
     addLocalScreenPreview(screenStream);
     playSound('screenshare');
@@ -3265,6 +3303,10 @@ function stopScreenShare() {
         }
       }
     }
+    for (const [socketId, pc] of Object.entries(screenSharePeers)) {
+      try { pc.close(); } catch(e) {}
+    }
+    for (const key in screenSharePeers) delete screenSharePeers[key];
     screenStream.getTracks().forEach(t => t.stop());
     screenStream = null;
   }
@@ -3494,10 +3536,46 @@ socket.on('screenShareStarted', ({ socketId, username }) => {
     const chatMain = document.querySelector('.chat-main');
     if (chatMain) chatMain.insertBefore(badge, chatMain.firstChild);
   }
+  if (socketId === socket.id) return;
+  let popup = document.getElementById(`ssPopup-${socketId}`);
+  if (!popup) {
+    popup = document.createElement('div');
+    popup.id = `ssPopup-${socketId}`;
+    popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:720px;max-width:90vw;background:#1a1a2e;border:2px solid #5865f2;border-radius:14px;z-index:10000;box-shadow:0 12px 48px rgba(0,0,0,0.7);overflow:hidden;animation:ssPopupIn 0.3s ease;';
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(135deg,#5865f2,#7b68ee);';
+    header.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:#fff;font-weight:700;font-size:15px;"><span style="display:inline-block;width:10px;height:10px;background:#f43f5e;border-radius:50%;animation:livePulse 1.5s infinite;"></span> ${username} esta compartilhando a tela</div>`;
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;font-weight:bold;';
+    closeBtn.onclick = () => { popup.style.display = 'none'; };
+    header.appendChild(closeBtn);
+    popup.appendChild(header);
+    const videoContainer = document.createElement('div');
+    videoContainer.id = `ssVideoContainer-${socketId}`;
+    videoContainer.style.cssText = 'width:100%;aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center;';
+    const placeholder = document.createElement('div');
+    placeholder.style.cssText = 'color:#666;font-size:14px;text-align:center;';
+    placeholder.innerHTML = `<div style="font-size:40px;margin-bottom:10px;">📺</div>Conectando a transmissao...`;
+    videoContainer.appendChild(placeholder);
+    popup.appendChild(videoContainer);
+    const footer = document.createElement('div');
+    footer.style.cssText = 'padding:8px 16px;background:#0d0d1a;display:flex;align-items:center;justify-content:space-between;';
+    footer.innerHTML = `<span style="color:#aaa;font-size:12px;">🔴 AO VIVO</span><button id="ssFullscreen-${socketId}" style="background:#5865f2;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;">Tela Cheia</button>`;
+    popup.appendChild(footer);
+    document.body.appendChild(popup);
+    const fsBtn = document.getElementById(`ssFullscreen-${socketId}`);
+    if (fsBtn) fsBtn.onclick = () => {
+      const vid = popup.querySelector('video');
+      if (vid) { if (vid.requestFullscreen) vid.requestFullscreen(); else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen(); }
+    };
+  }
 });
 
 socket.on('screenShareStopped', ({ socketId }) => {
   removeScreenShareVideo(socketId);
+  const popup = document.getElementById(`ssPopup-${socketId}`);
+  if (popup) popup.remove();
   const badge = document.getElementById(`live-badge-${socketId}`);
   if (badge) badge.remove();
   showToast('Compartilhamento de tela encerrado', 'info');
