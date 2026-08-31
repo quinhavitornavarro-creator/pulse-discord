@@ -3220,7 +3220,18 @@ async function startScreenShare() {
     socket.emit('screenShareStart', {});
     socket.emit('videoTypeChanged', { videoType: 'screen' });
 
-    console.log('[SCREEN] voicePeers:', Object.keys(voicePeers));
+    for (const [socketId, peer] of Object.entries(voicePeers)) {
+      if (peer.pc && peer.pc.signalingState !== 'closed' && peer.pc.signalingState === 'stable') {
+        try {
+          peer.pc.addTrack(track, screenStream);
+          const offer = await peer.pc.createOffer();
+          await peer.pc.setLocalDescription(offer);
+          socket.emit('voiceOffer', { offer, targetSocketId: socketId });
+          console.log('[SCREEN] sent voiceOffer to', socketId);
+        } catch(e) { console.log('[SCREEN] voice renegotiate error:', e); }
+      }
+    }
+
     for (const [socketId, peer] of Object.entries(voicePeers)) {
       if (peer.pc) {
         try {
@@ -3229,11 +3240,9 @@ async function startScreenShare() {
           ssPc.addTrack(track, screenStream);
           ssPc.ontrack = () => {};
           ssPc.onicecandidate = (e) => { if (e.candidate) socket.emit('ssIceCandidate', { candidate: e.candidate, targetSocketId: socketId }); };
-          ssPc.oniceconnectionstatechange = () => console.log('[SS] sender ICE:', ssPc.iceConnectionState, '->', socketId);
           const o = await ssPc.createOffer();
           await ssPc.setLocalDescription(o);
           socket.emit('ssOffer', { offer: o, targetSocketId: socketId });
-          console.log('[SCREEN] sent ssOffer to', socketId);
         } catch(e) { console.log('[SCREEN] ssOffer error:', e); }
       }
     }
@@ -3247,6 +3256,21 @@ async function startScreenShare() {
 
 function stopScreenShare() {
   if (screenStream) {
+    const track = screenStream.getVideoTracks()[0];
+    for (const [socketId, peer] of Object.entries(voicePeers)) {
+      if (peer.pc && peer.pc.signalingState !== 'closed') {
+        const sender = peer.pc.getSenders().find(s => s.track === track);
+        if (sender) {
+          try { peer.pc.removeTrack(sender); } catch(e) {}
+        }
+        if (peer.pc.signalingState === 'stable') {
+          peer.pc.createOffer().then(offer => {
+            peer.pc.setLocalDescription(offer);
+            socket.emit('voiceOffer', { offer, targetSocketId: socketId });
+          }).catch(() => {});
+        }
+      }
+    }
     screenStream.getTracks().forEach(t => t.stop());
     screenStream = null;
   }
