@@ -2278,7 +2278,6 @@ socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
   let existing = voicePeers[fromSocketId]?.pc;
   if (existing && existing.signalingState !== 'closed') {
     try {
-      voicePeers[fromSocketId].negotiating = true;
       if (existing.signalingState !== 'stable') {
         await existing.setLocalDescription({ type: 'rollback' });
       }
@@ -2287,33 +2286,16 @@ socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
       await existing.setLocalDescription(answer);
       socket.emit('voiceAnswer', { answer, targetSocketId: fromSocketId });
       console.log('[VOICE] renegotiate OK with', fromSocketId, 'state:', existing.signalingState);
-      voicePeers[fromSocketId].negotiating = false;
       return;
     } catch(e) {
       console.log('[VOICE] renegotiate answer error:', e);
-      if (voicePeers[fromSocketId]) voicePeers[fromSocketId].negotiating = false;
       return;
     }
   }
   const pc = new RTCPeerConnection(ICE_SERVERS);
-  voicePeers[fromSocketId] = { pc, negotiating: true };
+  voicePeers[fromSocketId] = { pc };
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
   pc.oniceconnectionstatechange = () => voiceDebug(`ICE(Answerer): ${pc.iceConnectionState} <- ${fromSocketId}`);
-  if (screenStream) {
-    screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
-  }
-  pc.onnegotiationneeded = async () => {
-    const peer = voicePeers[fromSocketId];
-    if (!peer || peer.negotiating || pc.signalingState !== 'stable') return;
-    peer.negotiating = true;
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('voiceOffer', { offer, targetSocketId: fromSocketId });
-      console.log('[VOICE] answerer renegotiate -> sent offer to', fromSocketId);
-    } catch(e) { console.log('[VOICE] answerer renegotiate error:', e); }
-    finally { if (voicePeers[fromSocketId]) voicePeers[fromSocketId].negotiating = false; }
-  };
   pc.ontrack = (e) => {
     voiceDebug(`Track recebida: ${e.track.kind} de ${fromSocketId}`);
     console.log('[VOICE] ontrack:', e.track.kind, 'from:', fromSocketId, 'streams:', e.streams.length, 'videoType:', remoteVideoTypes[fromSocketId]);
@@ -2335,22 +2317,18 @@ socket.on('voiceOffer', async ({ offer, fromSocketId }) => {
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
   socket.emit('voiceAnswer', { answer, targetSocketId: fromSocketId });
-  voicePeers[fromSocketId].negotiating = false;
 });
 
 socket.on('voiceAnswer', async ({ answer, fromSocketId }) => {
   try {
     const pc = voicePeers[fromSocketId]?.pc;
     if (pc && pc.signalingState !== 'closed') {
-      voicePeers[fromSocketId].negotiating = true;
       console.log('[VOICE] Received answer from:', fromSocketId, 'state:', pc.signalingState);
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
       console.log('[VOICE] setRemoteDescription OK for', fromSocketId);
-      voicePeers[fromSocketId].negotiating = false;
     }
   } catch(e) {
     console.log('[VOICE] answer error:', e);
-    if (voicePeers[fromSocketId]) voicePeers[fromSocketId].negotiating = false;
   }
 });
 
@@ -2360,28 +2338,13 @@ socket.on('voiceIceCandidate', ({ candidate, fromSocketId }) => {
 
 async function createVoicePeerOffer(targetSocketId) {
   const pc = new RTCPeerConnection(ICE_SERVERS);
-  voicePeers[targetSocketId] = { pc, negotiating: true };
+  voicePeers[targetSocketId] = { pc };
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  if (screenStream) {
-    screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
-  }
   if (webcamStream) {
     webcamStream.getTracks().forEach(t => pc.addTrack(t, webcamStream));
   }
   pc.oniceconnectionstatechange = () => {
     console.log('[VOICE] ICE state:', pc.iceConnectionState, 'to', targetSocketId);
-  };
-  pc.onnegotiationneeded = async () => {
-    const peer = voicePeers[targetSocketId];
-    if (!peer || peer.negotiating || pc.signalingState !== 'stable') return;
-    peer.negotiating = true;
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('voiceOffer', { offer, targetSocketId });
-      console.log('[VOICE] renegotiate OK -> sent offer to', targetSocketId);
-    } catch(e) { console.log('[VOICE] renegotiate error:', e); }
-    finally { if (voicePeers[targetSocketId]) voicePeers[targetSocketId].negotiating = false; }
   };
   pc.ontrack = (e) => {
     if (e.track.kind === 'video') {
@@ -2400,7 +2363,6 @@ async function createVoicePeerOffer(targetSocketId) {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   socket.emit('voiceOffer', { offer, targetSocketId });
-  voicePeers[targetSocketId].negotiating = false;
 }
 
 function addVoicePeerAudio(socketId, stream) {
@@ -3260,15 +3222,6 @@ async function startScreenShare() {
 
     console.log('[SCREEN] voicePeers:', Object.keys(voicePeers));
     for (const [socketId, peer] of Object.entries(voicePeers)) {
-      if (peer.pc && peer.pc.signalingState !== 'closed') {
-        try {
-          peer.pc.addTrack(track, screenStream);
-          console.log('[SCREEN] added track to voice PC for', socketId, 'state:', peer.pc.signalingState);
-        } catch(e) { console.log('[SCREEN] addTrack error:', e); }
-      }
-    }
-
-    for (const [socketId, peer] of Object.entries(voicePeers)) {
       if (peer.pc) {
         try {
           const ssPc = new RTCPeerConnection(ICE_SERVERS);
@@ -3294,25 +3247,16 @@ async function startScreenShare() {
 
 function stopScreenShare() {
   if (screenStream) {
-    const track = screenStream.getVideoTracks()[0];
-    for (const [socketId, peer] of Object.entries(voicePeers)) {
-      if (peer.pc && peer.pc.signalingState !== 'closed') {
-        const sender = peer.pc.getSenders().find(s => s.track === track);
-        if (sender) {
-          try { peer.pc.removeTrack(sender); } catch(e) {}
-        }
-      }
-    }
-    for (const [socketId, pc] of Object.entries(screenSharePeers)) {
-      try { pc.close(); } catch(e) {}
-    }
-    for (const key in screenSharePeers) delete screenSharePeers[key];
     screenStream.getTracks().forEach(t => t.stop());
     screenStream = null;
   }
   screenSharing = false;
   socket.emit('screenShareStop', {});
   playSound('screenshareStop');
+  for (const [socketId, pc] of Object.entries(screenSharePeers)) {
+    try { pc.close(); } catch(e) {}
+  }
+  for (const key in screenSharePeers) delete screenSharePeers[key];
   showScreenShareOverlay(false);
   removeLocalScreenPreview();
   socket.emit('videoTypeChanged', { videoType: webcamOn ? 'webcam' : 'none' });
@@ -3366,7 +3310,7 @@ async function toggleWebcam() {
     for (const [socketId, peer] of Object.entries(voicePeers)) {
       if (peer.pc) {
         const track = webcamStream.getVideoTracks()[0];
-        const sender = peer.pc.getSenders().find(s => s.track?.kind === 'video' && s !== peer.pc.getSenders().find(ss => ss.track === screenStream?.getVideoTracks()[0]));
+        const sender = peer.pc.getSenders().find(s => s.track?.kind === 'video');
         if (sender) sender.replaceTrack(track);
         else peer.pc.addTrack(track, webcamStream);
       }
