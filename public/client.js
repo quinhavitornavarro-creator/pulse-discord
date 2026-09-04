@@ -2221,7 +2221,7 @@ function voiceDebug(msg) {
   if (el) el.innerHTML += `<div style="font-size:11px;padding:2px 0;border-bottom:1px solid #333;">${new Date().toLocaleTimeString()} ${msg}</div>`;
 }
 
-socket.on('voiceConnected', async ({ peers, guildId, channelId }) => {
+socket.on('voiceConnected', async ({ peers, guildId, channelId, screenSharer }) => {
   voiceDebug(`Conectado. Peers: ${peers.length} | Stream: ${!!localStream} | Tracks: ${localStream?.getTracks().length || 0}`);
   const ch = allChannels[channelId] || {};
   showToast(`Conectado ao canal de voz ${ch.name || channelId}`, 'success');
@@ -2231,6 +2231,9 @@ socket.on('voiceConnected', async ({ peers, guildId, channelId }) => {
   for (const peer of peers) {
     voiceDebug(`Criando offer pra ${peer.username} (${peer.socketId})`);
     try { await createVoicePeerOffer(peer.socketId); } catch(e) { voiceDebug(`ERRO offer: ${e.message}`); }
+  }
+  if (screenSharer && screenSharer.socketId !== socket.id) {
+    showToast(`${screenSharer.username} esta compartilhando a tela`, 'info');
   }
   showVoicePanel();
   renderGuildChannels();
@@ -3212,46 +3215,42 @@ let webcamStream = null;
 let webcamOn = false;
 
 async function startScreenShare() {
+  if (Object.keys(voicePeers).length === 0) {
+    showToast('Entre em um canal de voz primeiro!', 'error');
+    return;
+  }
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false });
     const track = screenStream.getVideoTracks()[0];
-    track.onended = () => stopScreenShare();
+    track.onended = () => { if (screenSharing) stopScreenShare(); };
     screenSharing = true;
     socket.emit('screenShareStart', {});
     socket.emit('videoTypeChanged', { videoType: 'screen' });
-
     for (const [socketId, peer] of Object.entries(voicePeers)) {
-      if (peer.pc && peer.pc.signalingState !== 'closed' && peer.pc.signalingState === 'stable') {
+      if (peer.pc && peer.pc.signalingState !== 'closed') {
         try {
+          const existingVideo = peer.pc.getSenders().find(s => s.track?.kind === 'video' && s.track !== track);
+          if (existingVideo) {
+            try { peer.pc.removeTrack(existingVideo); } catch(e) {}
+          }
           peer.pc.addTrack(track, screenStream);
-          const offer = await peer.pc.createOffer();
-          await peer.pc.setLocalDescription(offer);
-          socket.emit('voiceOffer', { offer, targetSocketId: socketId });
-          console.log('[SCREEN] sent voiceOffer to', socketId);
+          if (peer.pc.signalingState === 'stable') {
+            const offer = await peer.pc.createOffer();
+            await peer.pc.setLocalDescription(offer);
+            socket.emit('voiceOffer', { offer, targetSocketId: socketId });
+            console.log('[SCREEN] sent voiceOffer to', socketId);
+          }
         } catch(e) { console.log('[SCREEN] voice renegotiate error:', e); }
       }
     }
-
-    for (const [socketId, peer] of Object.entries(voicePeers)) {
-      if (peer.pc) {
-        try {
-          const ssPc = new RTCPeerConnection(ICE_SERVERS);
-          screenSharePeers[socketId] = ssPc;
-          ssPc.addTrack(track, screenStream);
-          ssPc.ontrack = () => {};
-          ssPc.onicecandidate = (e) => { if (e.candidate) socket.emit('ssIceCandidate', { candidate: e.candidate, targetSocketId: socketId }); };
-          const o = await ssPc.createOffer();
-          await ssPc.setLocalDescription(o);
-          socket.emit('ssOffer', { offer: o, targetSocketId: socketId });
-        } catch(e) { console.log('[SCREEN] ssOffer error:', e); }
-      }
-    }
-
     showScreenShareOverlay(true);
     addLocalScreenPreview(screenStream);
     playSound('screenshare');
     showToast('Voce esta compartilhando a tela!', 'success');
-  } catch (e) { showToast('Compartilhamento cancelado', 'error'); }
+  } catch (e) {
+    console.log('[SCREEN] getDisplayMedia error:', e);
+    showToast('Compartilhamento cancelado ou permissao negada', 'error');
+  }
 }
 
 function stopScreenShare() {
@@ -3549,44 +3548,14 @@ socket.on('screenShareStopped', ({ socketId }) => {
   showToast('Compartilhamento de tela encerrado', 'info');
 });
 
+socket.on('screenShareForceStop', ({ reason }) => {
+  if (screenSharing) {
+    stopScreenShare();
+    showToast('Outro usuario iniciou compartilhamento. O seu foi encerrado.', 'info');
+  }
+});
+
 const screenSharePeers = {};
-
-socket.on('ssOffer', async ({ offer, fromSocketId }) => {
-  try {
-    let pc = screenSharePeers[fromSocketId];
-    if (!pc || pc.signalingState === 'closed') {
-      pc = new RTCPeerConnection(ICE_SERVERS);
-      screenSharePeers[fromSocketId] = pc;
-      pc.ontrack = (e) => {
-        console.log('[SS] ontrack:', e.track.kind, 'streams:', e.streams.length);
-        if (e.track.kind === 'video') {
-          const stream = e.streams[0] || new MediaStream([e.track]);
-          addScreenShareVideo(fromSocketId, stream);
-        }
-      };
-      pc.onicecandidate = (e) => { if (e.candidate) socket.emit('ssIceCandidate', { candidate: e.candidate, targetSocketId: fromSocketId }); };
-    }
-    if (pc.signalingState !== 'stable') {
-      await pc.setLocalDescription({ type: 'rollback' });
-    }
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socket.emit('ssAnswer', { answer, targetSocketId: fromSocketId });
-  } catch(e) { console.log('[SS] offer error:', e); }
-});
-
-socket.on('ssAnswer', async ({ answer, fromSocketId }) => {
-  try {
-    const pc = screenSharePeers[fromSocketId];
-    if (pc && pc.signalingState !== 'closed') await pc.setRemoteDescription(new RTCSessionDescription(answer));
-  } catch(e) { console.log('[SS] answer error:', e); }
-});
-
-socket.on('ssIceCandidate', ({ candidate, fromSocketId }) => {
-  const pc = screenSharePeers[fromSocketId];
-  if (pc && pc.signalingState !== 'closed') pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
-});
 
 // Atalho Ctrl+Shift+S pra screen share
 document.addEventListener('keydown', (e) => {

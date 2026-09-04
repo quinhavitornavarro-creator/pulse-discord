@@ -906,6 +906,7 @@ app.post('/api/categories', (req, res) => {
 
 // ============= VOICE CHANNEL SIGNALING (WebRTC) =============
 const voiceUsers = new Map();
+const screenSharers = new Map();
 
 // ============= VOICE CHANNEL TRACKING =============
 function getVoiceUsersByChannel(guildId, channelId) {
@@ -1278,7 +1279,9 @@ io.on('connection', (socket) => {
         peers.push({ socketId: sid, userId: vu.userId, username: vu.username, avatar: ud?.avatar, avatarEmoji: ud?.avatarEmoji, avatarColor: ud?.avatarColor });
       }
     }
-    socket.emit('voiceConnected', { peers, guildId, channelId });
+    const currentSharerSid = screenSharers.get(key);
+    const currentSharer = currentSharerSid ? { socketId: currentSharerSid, username: voiceUsers.get(currentSharerSid)?.username } : null;
+    socket.emit('voiceConnected', { peers, guildId, channelId, screenSharer: currentSharer });
 
     for (const [sid, vu] of voiceUsers) {
       if (sid !== socket.id && vu.key === key) {
@@ -1293,6 +1296,12 @@ io.on('connection', (socket) => {
   socket.on('voiceLeave', () => {
     const vu = voiceUsers.get(socket.id);
     if (!vu) return;
+    if (screenSharers.get(vu.key) === socket.id) {
+      screenSharers.delete(vu.key);
+      for (const [sid, v] of voiceUsers) {
+        if (v.key === vu.key) io.to(sid).emit('screenShareStopped', { socketId: socket.id });
+      }
+    }
     const guilds = loadGuilds();
     const guild = guilds[vu.guildId];
     const ch = guild?.channels?.[vu.channelId];
@@ -1342,10 +1351,25 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Screen share signaling
+  // Screen share signaling - one sharper per room
+
   socket.on('screenShareStart', (data) => {
     const vu = voiceUsers.get(socket.id);
     if (!vu) return;
+    const existing = screenSharers.get(vu.key);
+    if (existing && existing !== socket.id) {
+      const existingVu = voiceUsers.get(existing);
+      if (existingVu) {
+        io.to(existing).emit('screenShareForceStop', { reason: 'outro_usuario_compartilhando' });
+        for (const [sid, v] of voiceUsers) {
+          if (v.key === vu.key && sid !== existing) {
+            io.to(sid).emit('screenShareStopped', { socketId: existing });
+          }
+        }
+      }
+      screenSharers.delete(vu.key);
+    }
+    screenSharers.set(vu.key, socket.id);
     for (const [sid, v] of voiceUsers) {
       if (sid !== socket.id && v.key === vu.key) io.to(sid).emit('screenShareStarted', { socketId: socket.id, username: vu.username });
     }
@@ -1354,21 +1378,10 @@ io.on('connection', (socket) => {
   socket.on('screenShareStop', () => {
     const vu = voiceUsers.get(socket.id);
     if (!vu) return;
+    if (screenSharers.get(vu.key) === socket.id) screenSharers.delete(vu.key);
     for (const [sid, v] of voiceUsers) {
       if (sid !== socket.id && v.key === vu.key) io.to(sid).emit('screenShareStopped', { socketId: socket.id });
     }
-  });
-
-  socket.on('ssOffer', (data) => {
-    io.to(data.targetSocketId).emit('ssOffer', { offer: data.offer, fromSocketId: socket.id });
-  });
-
-  socket.on('ssAnswer', (data) => {
-    io.to(data.targetSocketId).emit('ssAnswer', { answer: data.answer, fromSocketId: socket.id });
-  });
-
-  socket.on('ssIceCandidate', (data) => {
-    io.to(data.targetSocketId).emit('ssIceCandidate', { candidate: data.candidate, fromSocketId: socket.id });
   });
 
   // Thread reply
@@ -1406,6 +1419,12 @@ io.on('connection', (socket) => {
 
       const vu = voiceUsers.get(socket.id);
       if (vu) {
+        if (screenSharers.get(vu.key) === socket.id) {
+          screenSharers.delete(vu.key);
+          for (const [sid, v] of voiceUsers) {
+            if (v.key === vu.key) io.to(sid).emit('screenShareStopped', { socketId: socket.id });
+          }
+        }
         for (const [sid, v] of voiceUsers) {
           if (sid !== socket.id && v.key === vu.key) io.to(sid).emit('voiceUserLeft', { socketId: socket.id, userId: vu.userId });
         }
